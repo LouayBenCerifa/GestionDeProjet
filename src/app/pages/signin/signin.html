@@ -1,14 +1,78 @@
-<h2></h2>
-<div>
-    <form [formGroup]="LoginForm" (ngSubmit)="Login()">
-        <div class="mb-3">
-            <label for="exampleInputEmail1" class="form-label">Email address</label>
-            <input type="email" class="form-control" id="exampleInputEmail1" aria-describedby="emailHelp">
+<div class="signin-container">
+  <div class="signin-card">
+    <h1>Sign In</h1>
+    <p class="subtitle">Welcome back! Please enter your details.</p>
+    
+    <form [formGroup]="LoginForm" (ngSubmit)="Login()" class="signin-form">
+      <!-- Email Field -->
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input 
+          id="email" 
+          type="email" 
+          formControlName="email" 
+          placeholder="Enter your email"
+          [class.error]="LoginForm.get('email')?.invalid && LoginForm.get('email')?.touched"
+        >
+        @if (LoginForm.get('email')?.invalid && LoginForm.get('email')?.touched) {
+          <div class="error-text">
+            @if (LoginForm.get('email')?.errors?.['required']) {
+              Email is required
+            }
+            @if (LoginForm.get('email')?.errors?.['email']) {
+              Please enter a valid email
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Password Field -->
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input 
+          id="password" 
+          type="password" 
+          formControlName="password" 
+          placeholder="Enter your password"
+          [class.error]="LoginForm.get('password')?.invalid && LoginForm.get('password')?.touched"
+        >
+        @if (LoginForm.get('password')?.invalid && LoginForm.get('password')?.touched) {
+          <div class="error-text">
+            @if (LoginForm.get('password')?.errors?.['required']) {
+              Password is required
+            }
+            @if (LoginForm.get('password')?.errors?.['minlength']) {
+              Password must be at least 6 characters
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Error Message -->
+      @if (errorMessage) {
+        <div class="global-error">
+          {{ errorMessage }}
         </div>
-        <div class="mb-3">
-            <label for="exampleInputPassword1" class="form-label">Password</label>
-            <input type="password" class="form-control" id="exampleInputPassword1">
-        </div>
-        <button type="submit" class="btn btn-primary">signin</button>
+      }
+
+      <!-- Submit Button -->
+      <button 
+        type="submit" 
+        class="submit-btn"
+        [disabled]="LoginForm.invalid || isLoading"
+      >
+        @if (isLoading) {
+          <span class="spinner"></span> Signing In...
+        } @else {
+          Sign In
+        }
+      </button>
+
+      <!-- Sign Up Link -->
+      <div class="signup-link">
+        Don't have an account? 
+        <a routerLink="/registre" class="link">Sign up here</a>
+      </div>
     </form>
+  </div>
 </div>

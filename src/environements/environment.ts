@@ -1,10 +1,6 @@
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-
 export const environment = {
   production: false,
-
-  firebaseConfig: {
+  firebase: {
     apiKey: "AIzaSyA9Ip52VC7NQ6gOJMmr-TrBY49lO6q7lrU",
     authDomain: "taskmanager-81835.firebaseapp.com",
     projectId: "taskmanager-81835",
@@ -14,7 +10,3 @@ export const environment = {
     measurementId: "G-SF5GD11P1X"
   }
 };
-
-// Firebase init
-export const app = initializeApp(environment.firebaseConfig);
-export const analytics = getAnalytics(app);

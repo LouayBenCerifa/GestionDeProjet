@@ -1,1 +1,107 @@
-<p>registre works!</p>
+<div class="register-container">
+  <div class="register-card">
+    <h1>Create Account</h1>
+    <p class="subtitle">Join us today! Fill in your details to get started.</p>
+    
+    <form [formGroup]="RegisterForm" (ngSubmit)="register()" class="register-form">
+      <!-- Email Field -->
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input 
+          id="email" 
+          type="email" 
+          formControlName="email" 
+          placeholder="Enter your email"
+          [class.error]="RegisterForm.get('email')?.invalid && RegisterForm.get('email')?.touched"
+        >
+        @if (RegisterForm.get('email')?.invalid && RegisterForm.get('email')?.touched) {
+          <div class="error-text">
+            @if (RegisterForm.get('email')?.errors?.['required']) {
+              Email is required
+            }
+            @if (RegisterForm.get('email')?.errors?.['email']) {
+              Please enter a valid email
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Password Field -->
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input 
+          id="password" 
+          type="password" 
+          formControlName="password" 
+          placeholder="Enter your password (min 6 characters)"
+          [class.error]="RegisterForm.get('password')?.invalid && RegisterForm.get('password')?.touched"
+        >
+        @if (RegisterForm.get('password')?.invalid && RegisterForm.get('password')?.touched) {
+          <div class="error-text">
+            @if (RegisterForm.get('password')?.errors?.['required']) {
+              Password is required
+            }
+            @if (RegisterForm.get('password')?.errors?.['minlength']) {
+              Password must be at least 6 characters
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Confirm Password Field -->
+      <div class="form-group">
+        <label for="confirmPassword">Confirm Password</label>
+        <input 
+          id="confirmPassword" 
+          type="password" 
+          formControlName="confirmPassword" 
+          placeholder="Confirm your password"
+          [class.error]="RegisterForm.get('confirmPassword')?.invalid && RegisterForm.get('confirmPassword')?.touched"
+        >
+        @if (RegisterForm.get('confirmPassword')?.invalid && RegisterForm.get('confirmPassword')?.touched) {
+          <div class="error-text">
+            @if (RegisterForm.get('confirmPassword')?.errors?.['required']) {
+              Please confirm your password
+            }
+            @if (RegisterForm.get('confirmPassword')?.errors?.['passwordMismatch']) {
+              Passwords do not match
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Error Message -->
+      @if (errorMessage) {
+        <div class="global-error">
+          {{ errorMessage }}
+        </div>
+      }
+
+      <!-- Success Message -->
+      @if (successMessage) {
+        <div class="success-message">
+          {{ successMessage }}
+        </div>
+      }
+
+      <!-- Submit Button -->
+      <button 
+        type="submit" 
+        class="submit-btn"
+        [disabled]="RegisterForm.invalid || isLoading"
+      >
+        @if (isLoading) {
+          <span class="spinner"></span> Creating Account...
+        } @else {
+          Create Account
+        }
+      </button>
+
+      <!-- Sign In Link -->
+      <div class="signin-link">
+        Already have an account? 
+        <a routerLink="/signin" class="link">Sign in here</a>
+      </div>
+    </form>
+  </div>
+</div>

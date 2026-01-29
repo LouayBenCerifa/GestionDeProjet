@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-
+import { ReactiveFormsModule } from '@angular/forms';
 import { Signin } from './signin';
 
 describe('Signin', () => {
@@ -8,9 +8,8 @@ describe('Signin', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [Signin]
-    })
-    .compileComponents();
+      imports: [Signin, ReactiveFormsModule]  // ✅ Added ReactiveFormsModule
+    }).compileComponents();
 
     fixture = TestBed.createComponent(Signin);
     component = fixture.componentInstance;
@@ -19,5 +18,11 @@ describe('Signin', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('should initialize form with validators', () => {
+    expect(component['LoginForm']).toBeDefined();
+    expect(component['LoginForm'].get('email')?.hasError('required')).toBeTrue();
+    expect(component['LoginForm'].get('password')?.hasError('minlength')).toBeTrue();
   });
 });
