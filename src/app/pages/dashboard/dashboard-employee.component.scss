@@ -1,0 +1,17 @@
+.employee-dashboard-layout {
+  display: flex;
+  min-height: 100vh;
+}
+.main-content {
+  flex: 1;
+  padding: 32px;
+  background: #f5f7fa;
+  display: flex;
+  flex-direction: column;
+}
+.dashboard-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 24px;
+  margin-bottom: 32px;
+}

@@ -1,12 +1,11 @@
 <!-- src/app/pages/signin/signin.html -->
-<div class="login-container">
-  <div class="login-card">
-    <div class="login-header">
-      <h2>Welcome Back! 👋</h2>
-      <p>Sign in to your account to continue</p>
-    </div>
-
-    <form [formGroup]="LoginForm" (ngSubmit)="Login()" class="login-form">
+<div class="signin-container">
+  <div class="signin-card">
+    <header style="text-align:center; margin-bottom: 24px;">
+      <h1>GestionPro <span style="font-size:1.2em;">🔒</span></h1>
+      <div class="subtitle">Sign in to your account to continue</div>
+    </header>
+    <form [formGroup]="LoginForm" (ngSubmit)="Login()" class="signin-form" autocomplete="on">
       <!-- Email Input -->
       <div class="form-group">
         <label for="email">Email Address</label>
@@ -15,10 +14,11 @@
           id="email"
           formControlName="email"
           placeholder="Enter your email"
-          [class.invalid]="LoginForm.get('email')?.invalid && LoginForm.get('email')?.touched"
+          [class.error]="LoginForm.get('email')?.invalid && LoginForm.get('email')?.touched"
+          autocomplete="email"
         />
         @if (LoginForm.get('email')?.invalid && LoginForm.get('email')?.touched) {
-          <div class="error-message">
+          <div class="error-text">
             @if (LoginForm.get('email')?.errors?.['required']) {
               Email is required
             }
@@ -28,7 +28,6 @@
           </div>
         }
       </div>
-
       <!-- Password Input -->
       <div class="form-group">
         <label for="password">Password</label>
@@ -37,10 +36,11 @@
           id="password"
           formControlName="password"
           placeholder="Enter your password"
-          [class.invalid]="LoginForm.get('password')?.invalid && LoginForm.get('password')?.touched"
+          [class.error]="LoginForm.get('password')?.invalid && LoginForm.get('password')?.touched"
+          autocomplete="current-password"
         />
         @if (LoginForm.get('password')?.invalid && LoginForm.get('password')?.touched) {
-          <div class="error-message">
+          <div class="error-text">
             @if (LoginForm.get('password')?.errors?.['required']) {
               Password is required
             }
@@ -50,19 +50,18 @@
           </div>
         }
       </div>
-
       <!-- Error Message -->
       @if (errorMessage) {
-        <div class="alert alert-error">
+        <div class="global-error">
           {{ errorMessage }}
         </div>
       }
-
       <!-- Submit Button -->
       <button 
         type="submit" 
-        class="login-btn"
+        class="submit-btn"
         [disabled]="LoginForm.invalid || isLoading"
+        aria-busy="{{isLoading}}"
       >
         @if (isLoading) {
           <span class="spinner"></span> Signing in...
@@ -70,10 +69,11 @@
           Sign In
         }
       </button>
-
       <!-- Links -->
-      <div class="login-links">
-        <a routerLink="/registre" class="link">Don't have an account? Sign up</a>
+      <div class="signup-link">
+        <span>Don't have an account?</span>
+        <a routerLink="/registre" class="link">Sign up</a>
+        <span style="margin:0 8px;">|</span>
         <a (click)="resetPassword()" class="link">Forgot password?</a>
       </div>
     </form>

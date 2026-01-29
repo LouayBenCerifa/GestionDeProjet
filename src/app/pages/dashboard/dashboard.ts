@@ -1,4 +1,3 @@
-
 import { Component, inject, OnInit, signal, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
@@ -15,7 +14,9 @@ import {
   Timestamp,
   query,
   where,
-  getDocs 
+  getDocs,
+  getDoc,
+  setDoc
 } from '@angular/fire/firestore';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { catchError, of } from 'rxjs';
@@ -33,133 +34,146 @@ interface Task {
   selector: 'app-dashboard',
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule],
+  // CommonModule is already present, but if not, ensure it is included for *ngIf support
   template: `
     <div class="dashboard-container">
-      <!-- Header -->
-      <header class="dashboard-header">
-        <div class="header-content">
-          <h1>Welcome, {{ userName() }}! 👋</h1>
-          <p>Here's an overview of your tasks and progress.</p>
+      <!-- Access Denied State -->
+      @if (!isAdmin()) {
+        <div class="access-denied">
+          <div class="denied-icon">🚫</div>
+          <h1>Access Denied</h1>
+          <p>This dashboard is restricted to administrators only.</p>
+          <p class="user-role-info">Your role: <strong>{{ userRole() }}</strong></p>
+          <button class="back-btn" (click)="goBack()">Go Back to Home</button>
         </div>
-        <button class="logout-btn" (click)="logout()">Logout</button>
-      </header>
-
-      <!-- Stats Cards -->
-      <div class="stats-container">
-        <div class="stat-card">
-          <div class="stat-icon">📊</div>
-          <div class="stat-info">
-            <h3>{{ totalTasks() }}</h3>
-            <p>Total Tasks</p>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon">✅</div>
-          <div class="stat-info">
-            <h3>{{ completedTasks() }}</h3>
-            <p>Completed</p>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon">⏳</div>
-          <div class="stat-info">
-            <h3>{{ pendingTasks() }}</h3>
-            <p>Pending</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Add Task Form -->
-      <div class="add-task-section">
-        <div class="section-header">
-          <h2>Add New Task</h2>
-        </div>
-        <form [formGroup]="taskForm" (ngSubmit)="addNewTask()" class="add-task-form">
-          <input 
-            type="text" 
-            placeholder="Task title" 
-            formControlName="title"
-            class="task-input"
-          >
-          @if (taskForm.get('title')?.invalid && taskForm.get('title')?.touched) {
-            <small class="error-text">Title is required (min 3 characters)</small>
-          }
-          <textarea 
-            placeholder="Task description (optional)" 
-            formControlName="description"
-            class="task-textarea"
-          ></textarea>
-          <button 
-            type="submit" 
-            class="add-task-btn" 
-            [disabled]="taskForm.invalid || addingTask()"
-          >
-            @if (addingTask()) {
-              <span class="spinner-small"></span> Adding...
-            } @else {
-              + Add Task
-            }
-          </button>
-        </form>
-      </div>
-
-      <!-- Tasks Section -->
-      <div class="tasks-section">
-        <div class="section-header">
-          <h2>Your Tasks</h2>
-          <button class="clear-btn" (click)="clearLocalTasks()" *ngIf="usingLocalTasks()">Clear Local Tasks</button>
-          <button class="retry-btn" (click)="retryFirebaseConnection()" *ngIf="dbError()">Retry Firebase</button>
-        </div>
-
-        <!-- Error State -->
+      } @else {
+        <!-- Original dashboard content -->
         
-
-        <!-- Tasks List -->
-        @if (tasks().length === 0) {
-          <div class="empty-state">
-            <div class="empty-icon">📋</div>
-            <h3>No tasks yet</h3>
-            <p>Start by adding your first task!</p>
+        <!-- Header -->
+        <header class="dashboard-header">
+          <div class="header-content">
+            <h1>Welcome, {{ userName() }}! 👋</h1>
+            <p>Here's an overview of your tasks and progress.</p>
+            <span class="admin-badge">Administrator</span>
           </div>
-        } @else {
-          <div class="tasks-list">
-            @for (task of tasks(); track task.id) {
-              <div class="task-card" [class.completed]="task.completed">
-                <div class="task-checkbox">
-                  <input 
-                    type="checkbox" 
-                    [checked]="task.completed" 
-                    (change)="toggleTask(task)"
-                  >
-                </div>
-                <div class="task-content">
-                  <h4 [class.completed-text]="task.completed">{{ task.title }}</h4>
-                  <p [class.completed-text]="task.completed">{{ task.description }}</p>
-                  <span class="task-date">{{ task.createdAt | date:'mediumDate' }}</span>
-                  @if (usingLocalTasks()) {
-                    <span class="local-badge">Local</span>
-                  }
-                </div>
-                <button class="delete-btn" (click)="deleteTask(task.id)">🗑️</button>
-              </div>
+          <button class="logout-btn" (click)="logout()">Logout</button>
+        </header>
+
+        <!-- Stats Cards -->
+        <div class="stats-container">
+          <div class="stat-card">
+            <div class="stat-icon">📊</div>
+            <div class="stat-info">
+              <h3>{{ totalTasks() }}</h3>
+              <p>Total Tasks</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">✅</div>
+            <div class="stat-info">
+              <h3>{{ completedTasks() }}</h3>
+              <p>Completed</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">⏳</div>
+            <div class="stat-info">
+              <h3>{{ pendingTasks() }}</h3>
+              <p>Pending</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Add Task Form -->
+        <div class="add-task-section">
+          <div class="section-header">
+            <h2>Add New Task</h2>
+          </div>
+          <form [formGroup]="taskForm" (ngSubmit)="addNewTask()" class="add-task-form">
+            <input 
+              type="text" 
+              placeholder="Task title" 
+              formControlName="title"
+              class="task-input"
+            >
+            @if (taskForm.get('title')?.invalid && taskForm.get('title')?.touched) {
+              <small class="error-text">Title is required (min 3 characters)</small>
             }
-          </div>
-        }
-      </div>
+            <textarea 
+              placeholder="Task description (optional)" 
+              formControlName="description"
+              class="task-textarea"
+            ></textarea>
+            <button 
+              type="submit" 
+              class="add-task-btn" 
+              [disabled]="taskForm.invalid || addingTask()"
+            >
+              @if (addingTask()) {
+                <span class="spinner-small"></span> Adding...
+              } @else {
+                + Add Task
+              }
+            </button>
+          </form>
+        </div>
 
-      <!-- User Info -->
-      <div class="user-info-card">
-        <div class="user-avatar">
-          {{ userName().charAt(0).toUpperCase() }}
+        <!-- Tasks Section -->
+        <div class="tasks-section">
+          <div class="section-header">
+            <h2>Your Tasks</h2>
+            <button class="clear-btn" (click)="clearLocalTasks()" *ngIf="usingLocalTasks()">Clear Local Tasks</button>
+            <button class="retry-btn" (click)="retryFirebaseConnection()" *ngIf="dbError()">Retry Firebase</button>
+          </div>
+
+
+          <!-- Tasks List -->
+          @if (tasks().length === 0) {
+            <div class="empty-state">
+              <div class="empty-icon">📋</div>
+              <h3>No tasks yet</h3>
+              <p>Start by adding your first task!</p>
+            </div>
+          } @else {
+            <div class="tasks-list">
+              @for (task of tasks(); track task.id) {
+                <div class="task-card" [class.completed]="task.completed">
+                  <div class="task-checkbox">
+                    <input 
+                      type="checkbox" 
+                      [checked]="task.completed" 
+                      (change)="toggleTask(task)"
+                    >
+                  </div>
+                  <div class="task-content">
+                    <h4 [class.completed-text]="task.completed">{{ task.title }}</h4>
+                    <p [class.completed-text]="task.completed">{{ task.description }}</p>
+                    <span class="task-date">{{ task.createdAt | date:'mediumDate' }}</span>
+                    @if (usingLocalTasks()) {
+                      <span class="local-badge">Local</span>
+                    }
+                  </div>
+                  <button class="delete-btn" (click)="deleteTask(task.id)">🗑️</button>
+                </div>
+              }
+            </div>
+          }
         </div>
-        <div class="user-details">
-          <h3>Account Information</h3>
-          <p><strong>Email:</strong> {{ userEmail() }}</p>
-          <p><strong>Member since:</strong> {{ memberSince() | date:'longDate' }}</p>
-          <p><strong>User ID:</strong> {{ userId() }}</p>
-          <p><strong>Storage:</strong> {{ usingLocalTasks() ? 'Local Storage' : 'Firebase Firestore' }}</p>
+
+        <!-- User Info -->
+        <div class="user-info-card">
+          <div class="user-avatar">
+            {{ userName().charAt(0).toUpperCase() }}
+          </div>
+          <div class="user-details">
+            <h3>Account Information</h3>
+            <p><strong>Role:</strong> <span class="role-badge admin">Administrator</span></p>
+            <p><strong>Email:</strong> {{ userEmail() }}</p>
+            <p><strong>Member since:</strong> {{ memberSince() | date:'longDate' }}</p>
+            <p><strong>Storage:</strong> {{ usingLocalTasks() ? 'Local Storage' : 'Firebase Firestore' }}</p>
+          </div>
         </div>
-      </div>
+      }
     </div>
   `,
   styles: [`
@@ -167,6 +181,55 @@ interface Task {
       min-height: 100vh;
       background: #f5f7fa;
       padding: 30px;
+    }
+
+    .access-denied {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 70vh;
+      text-align: center;
+      padding: 40px;
+    }
+    
+    .denied-icon {
+      font-size: 80px;
+      margin-bottom: 20px;
+    }
+    
+    .access-denied h1 {
+      color: #ff4757;
+      margin-bottom: 15px;
+    }
+    
+    .access-denied p {
+      color: #7f8c8d;
+      margin-bottom: 10px;
+      max-width: 500px;
+    }
+    
+    .user-role-info {
+      background: #f8f9fa;
+      padding: 10px 20px;
+      border-radius: 8px;
+      margin-top: 20px !important;
+    }
+    
+    .back-btn {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 30px;
+      transition: background 0.3s;
+    }
+    
+    .back-btn:hover {
+      background: #5a6fd8;
     }
 
     .dashboard-header {
@@ -185,6 +248,17 @@ interface Task {
     .header-content p {
       color: #7f8c8d;
       font-size: 16px;
+    }
+
+    .admin-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 20px;
+      margin-top: 8px;
     }
 
     .logout-btn {
@@ -525,6 +599,20 @@ interface Task {
       color: #2c3e50;
     }
 
+    .role-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+    
+    .role-badge.admin {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
@@ -542,6 +630,8 @@ export class DashboardComponent implements OnInit {
   userEmail = signal('');
   memberSince = signal(new Date());
   userId = signal('');
+  userRole = signal('user');
+  isAdmin = signal(false);
 
   // Task management
   tasks = signal<Task[]>([]);
@@ -557,7 +647,7 @@ export class DashboardComponent implements OnInit {
   completedTasks = () => this.tasks().filter(task => task.completed).length;
   pendingTasks = () => this.tasks().filter(task => !task.completed).length;
 
-  ngOnInit() {
+  async ngOnInit() {
     const user = this.authService.getCurrentUser();
     
     if (!user) {
@@ -565,7 +655,20 @@ export class DashboardComponent implements OnInit {
       return;
     }
 
-    // Set user info
+    // Check user role from Firestore
+    await this.checkUserRole(user.uid);
+    
+    // If not admin, stop here
+    if (!this.isAdmin()) {
+      // Still set basic user info for the access denied view
+      this.userEmail.set(user.email || '');
+      this.userName.set(user.email?.split('@')[0] || 'User');
+      this.userId.set(user.uid);
+      this.memberSince.set(new Date(user.metadata.creationTime || Date.now()));
+      return;
+    }
+
+    // Set user info for admin
     this.userEmail.set(user.email || '');
     this.userName.set(user.email?.split('@')[0] || 'User');
     this.userId.set(user.uid);
@@ -579,6 +682,56 @@ export class DashboardComponent implements OnInit {
 
     // Try to load tasks from Firestore, fallback to local if fails
     this.loadTasksFromFirestore(user.uid);
+  }
+
+  // Check user role from Firestore 'users' collection
+  async checkUserRole(userId: string) {
+    try {
+      console.log('Checking user role for:', userId);
+      
+      const userDocRef = doc(this.firestore, 'users', userId);
+      const userSnap = await getDoc(userDocRef);
+      
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        const role = userData['role'] || 'user';
+        console.log('User role found:', role);
+        
+        this.userRole.set(role);
+        this.isAdmin.set(role === 'admin');
+      } else {
+        console.log('User document not found, creating default...');
+        // User document doesn't exist, create one with default 'user' role
+        await this.createUserDocument(userId);
+        this.userRole.set('user');
+        this.isAdmin.set(false);
+      }
+    } catch (error) {
+      console.error('Error checking user role:', error);
+      this.userRole.set('user');
+      this.isAdmin.set(false);
+    }
+  }
+
+  // Create user document if it doesn't exist
+  async createUserDocument(userId: string) {
+    try {
+      const userDocRef = doc(this.firestore, 'users', userId);
+      const user = this.authService.getCurrentUser();
+      
+      await setDoc(userDocRef, {
+        uid: userId,
+        email: user?.email || '',
+        displayName: user?.displayName || '',
+        role: 'user', // Default role
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      });
+      
+      console.log('User document created with default role: user');
+    } catch (error) {
+      console.error('Error creating user document:', error);
+    }
   }
 
   // Try loading from Firestore, fallback to local storage
@@ -856,6 +1009,11 @@ export class DashboardComponent implements OnInit {
       this.dbError.set('');
       this.loadTasksFromFirestore(user.uid);
     }
+  }
+
+  // Go back to home page
+  goBack() {
+    this.router.navigate(['/signin']);
   }
 
   logout() {

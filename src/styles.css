@@ -1,1 +1,127 @@
-/* You can add global styles to this file, and also import other style files */
+/* Modern input styles */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="search"],
+input[type="url"],
+textarea, select {
+	width: 100%;
+	padding: var(--space-sm) var(--space-md);
+	border: 2px solid var(--color-border);
+	border-radius: var(--radius-sm);
+	font-size: 16px;
+	font-family: var(--font-main);
+	background: var(--color-surface);
+	color: var(--color-text);
+	transition: border-color 0.2s, box-shadow 0.2s;
+	outline: none;
+	box-shadow: none;
+}
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+input[type="search"]:focus,
+input[type="url"]:focus,
+textarea:focus, select:focus {
+	border-color: var(--color-primary);
+	box-shadow: 0 0 0 2px var(--color-primary-dark, #5a6fd8)22;
+}
+input[type="text"]::placeholder,
+input[type="email"]::placeholder,
+input[type="password"]::placeholder,
+input[type="number"]::placeholder,
+input[type="search"]::placeholder,
+input[type="url"]::placeholder,
+textarea::placeholder {
+	color: var(--color-text-light);
+	opacity: 1;
+}
+/* Global Design Tokens */
+:root {
+	/* Colors */
+	--color-primary: #667eea;
+	--color-primary-dark: #5a6fd8;
+	--color-accent: #f6ad55;
+	--color-bg: #f8f9fa;
+	--color-surface: #fff;
+	--color-border: #e0e0e0;
+	--color-shadow: rgba(0,0,0,0.05);
+	--color-text: #22223b;
+	--color-text-light: #6c757d;
+	--color-success: #38b2ac;
+	--color-error: #e53e3e;
+
+	/* Spacing */
+	--space-xs: 4px;
+	--space-sm: 8px;
+	--space-md: 16px;
+	--space-lg: 32px;
+	--space-xl: 48px;
+
+	/* Border radius */
+	--radius-sm: 6px;
+	--radius-md: 12px;
+	--radius-lg: 24px;
+
+	/* Shadows */
+	--shadow-sm: 0 2px 6px var(--color-shadow);
+	--shadow-md: 0 4px 12px var(--color-shadow);
+
+	/* Font */
+	--font-main: 'Inter', 'Segoe UI', Arial, sans-serif;
+}
+
+/* Base Styles */
+html, body {
+	height: 100%;
+	margin: 0;
+	padding: 0;
+	font-family: var(--font-main);
+	background: var(--color-bg);
+	color: var(--color-text);
+	font-size: 16px;
+	box-sizing: border-box;
+}
+
+*, *::before, *::after {
+	box-sizing: inherit;
+}
+
+h1, h2, h3, h4, h5, h6 {
+	color: var(--color-text);
+	font-weight: 700;
+	margin-top: 0;
+}
+
+a {
+	color: var(--color-primary);
+	text-decoration: none;
+	transition: color 0.2s;
+}
+a:hover {
+	color: var(--color-primary-dark);
+}
+
+button {
+	font-family: var(--font-main);
+	border-radius: var(--radius-sm);
+	border: none;
+	background: var(--color-primary);
+	color: #fff;
+	padding: var(--space-sm) var(--space-md);
+	font-weight: 600;
+	cursor: pointer;
+	transition: background 0.2s;
+}
+button:hover {
+	background: var(--color-primary-dark);
+}
+
+/* Responsive Typography */
+@media (max-width: 600px) {
+	html {
+		font-size: 15px;
+	}
+}

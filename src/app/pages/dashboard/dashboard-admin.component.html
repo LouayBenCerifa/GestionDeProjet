@@ -1,0 +1,33 @@
+<div class="admin-dashboard-layout">
+  <app-sidebar [userName]="'Admin User'" [userAvatarUrl]="'https://ui-avatars.com/api/?name=Admin'" />
+  <div class="main-content">
+    <app-topbar [pageTitle]="'Admin Dashboard'" [userAvatarUrl]="'https://ui-avatars.com/api/?name=Admin'" />
+    <h2 style="margin: 32px 0 16px 0; color: var(--color-primary);">Welcome, Admin!</h2>
+    <div class="dashboard-overview">
+      <app-card>
+        <div class="stat-icon">📊</div>
+        <div>
+          <h3>80%</h3>
+          <p>Project Progress</p>
+        </div>
+      </app-card>
+      <app-card>
+        <div class="stat-icon">✅</div>
+        <div>
+          <h3>65%</h3>
+          <p>Task Completion</p>
+        </div>
+      </app-card>
+      <app-card>
+        <div class="stat-icon">👥</div>
+        <div>
+          <h3>12</h3>
+          <p>Active Employees</p>
+        </div>
+      </app-card>
+    </div>
+    <app-project-list [projects]="[]"></app-project-list>
+    <app-task-list [tasks]="[]"></app-task-list>
+    <app-chat [messages]="[]" [currentUserId]="'admin-id'" ></app-chat>
+  </div>
+</div>

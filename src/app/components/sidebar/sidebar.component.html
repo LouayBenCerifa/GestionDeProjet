@@ -1,0 +1,17 @@
+<nav class="sidebar">
+  <div class="logo">GestionPro</div>
+  <ul>
+    <li routerLink="/dashboard" routerLinkActive="active"><span>🏠</span> Main Dashboard</li>
+    <li routerLink="/dashboard/admin" routerLinkActive="active"><span>🛡️</span> Admin Dashboard</li>
+    <li routerLink="/dashboard/employee" routerLinkActive="active"><span>👤</span> Employee Dashboard</li>
+    <li routerLink="/registre" routerLinkActive="active"><span>📝</span> Register</li>
+    <li routerLink="/chat" routerLinkActive="active"><span>💬</span> Chat</li>
+    <li routerLink="/profile" routerLinkActive="active"><span>🙍‍♂️</span> Profile</li>
+    <li routerLink="/notifications" routerLinkActive="active"><span>🔔</span> Notifications</li>
+  </ul>
+  <div class="sidebar-footer">
+    <img [src]="userAvatarUrl" class="avatar" />
+    <span>{{ userName }}</span>
+    <button (click)="logout()">Logout</button>
+  </div>
+</nav>

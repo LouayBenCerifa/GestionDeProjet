@@ -1,0 +1,12 @@
+.progress-bar-container {
+  background: var(--color-border);
+  border-radius: var(--radius-sm);
+  height: 8px;
+  width: 100%;
+}
+.progress-bar {
+  background: linear-gradient(90deg, var(--color-primary), #764ba2);
+  height: 100%;
+  border-radius: var(--radius-sm);
+  transition: width 0.3s;
+}

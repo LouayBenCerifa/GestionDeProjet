@@ -1,0 +1,52 @@
+.projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--space-lg);
+}
+.project-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-md) var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.project-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.project-status {
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--color-bg);
+  color: var(--color-primary);
+}
+.status-planning {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+.status-in-progress {
+  background: var(--color-primary);
+  color: #fff;
+}
+.status-completed {
+  background: var(--color-success);
+  color: #fff;
+}
+.project-description {
+  color: var(--color-text-light);
+  font-size: 15px;
+}
+.progress-section {
+  margin: var(--space-xs) 0;
+}
+.project-info {
+  color: var(--color-text-light);
+  font-size: 13px;
+  display: flex;
+  gap: var(--space-sm);
+}

@@ -1,0 +1,13 @@
+<div class="tasks-list">
+  <div *ngFor="let task of tasks" class="task-card" [class.completed]="task.completed">
+    <div class="task-checkbox">
+      <input type="checkbox" [checked]="task.completed" (change)="toggleTask.emit(task)" />
+    </div>
+    <div class="task-content">
+      <h4 [class.completed-text]="task.completed">{{ task.title }}</h4>
+      <p [class.completed-text]="task.completed">{{ task.description }}</p>
+      <span class="task-date">{{ task.createdAt | date:'mediumDate' }}</span>
+    </div>
+    <button class="delete-btn" (click)="deleteTask.emit(task.id)">🗑️</button>
+  </div>
+</div>

@@ -1,0 +1,19 @@
+<div class="projects-grid">
+  <div *ngFor="let project of projects" class="project-card">
+    <div class="project-header">
+      <h3>{{ project.name }}</h3>
+      <span class="project-status" [class]="'status-' + project.status">
+        {{ project.status | titlecase }}
+      </span>
+    </div>
+    <p class="project-description">{{ project.description }}</p>
+    <div class="progress-section">
+      <app-progress-bar [progress]="project.completionPercentage"></app-progress-bar>
+      <p class="progress-text">{{ project.completionPercentage.toFixed(0) }}% Complete</p>
+    </div>
+    <div class="project-info">
+      <span>📅 {{ project.startDate | date: 'MMM dd' }} - {{ project.endDate | date: 'MMM dd, yyyy' }}</span>
+      <span>👥 {{ project.teamMembers.length || 0 }} members</span>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,36 @@
+<div class="employee-dashboard-layout">
+  <app-sidebar [userName]="'Employee User'" [userAvatarUrl]="'https://ui-avatars.com/api/?name=Employee'" />
+  <div class="main-content">
+    <app-topbar [pageTitle]="'Employee Dashboard'" [userAvatarUrl]="'https://ui-avatars.com/api/?name=Employee'">
+      <app-notification></app-notification>
+    </app-topbar>
+    <h2 style="margin: 32px 0 16px 0; color: var(--color-primary);">Welcome, Employee!</h2>
+    <div class="dashboard-overview">
+      <app-card>
+        <div class="stat-icon">✅</div>
+        <div>
+          <h3>5</h3>
+          <p>Tasks To Do</p>
+        </div>
+      </app-card>
+      <app-card>
+        <div class="stat-icon">🔄</div>
+        <div>
+          <h3>2</h3>
+          <p>In Progress</p>
+        </div>
+      </app-card>
+      <app-card>
+        <div class="stat-icon">✔️</div>
+        <div>
+          <h3>8</h3>
+          <p>Completed</p>
+        </div>
+      </app-card>
+    </div>
+    <app-task-list [tasks]="[]"></app-task-list>
+    <app-project-list [projects]="[]"></app-project-list>
+    <app-chat [messages]="[]" [currentUserId]="'employee-id'" ></app-chat>
+    <app-profile [user]="{ name: 'Employee User', email: 'employee@email.com', avatarUrl: 'https://ui-avatars.com/api/?name=Employee' }"></app-profile>
+  </div>
+</div>
