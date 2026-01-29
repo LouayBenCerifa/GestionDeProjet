@@ -50,4 +50,25 @@ export class Signin implements OnInit {
       }
     }
   }
+  async resetPassword() {
+  const email = this.LoginForm.get('email')?.value;
+  
+  if (!email) {
+    this.errorMessage = 'Please enter your email address first.';
+    return;
+  }
+  
+  if (!this.LoginForm.get('email')?.valid) {
+    this.errorMessage = 'Please enter a valid email address.';
+    return;
+  }
+  
+  try {
+    await this.authService.resetPassword(email);
+    this.errorMessage = '';
+    alert('Password reset email sent! Check your inbox.');
+  } catch (err: any) {
+    this.errorMessage = err.message || 'Failed to send reset email.';
+  }
+}
 }

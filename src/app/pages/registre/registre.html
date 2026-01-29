@@ -1,21 +1,24 @@
+<!-- src/app/pages/registre/registre.html -->
 <div class="register-container">
   <div class="register-card">
-    <h1>Create Account</h1>
-    <p class="subtitle">Join us today! Fill in your details to get started.</p>
-    
+    <div class="register-header">
+      <h2>Create Account 🚀</h2>
+      <p>Join us and start managing your tasks</p>
+    </div>
+
     <form [formGroup]="RegisterForm" (ngSubmit)="register()" class="register-form">
-      <!-- Email Field -->
+      <!-- Email Input -->
       <div class="form-group">
-        <label for="email">Email</label>
-        <input 
-          id="email" 
-          type="email" 
-          formControlName="email" 
+        <label for="email">Email Address</label>
+        <input
+          type="email"
+          id="email"
+          formControlName="email"
           placeholder="Enter your email"
-          [class.error]="RegisterForm.get('email')?.invalid && RegisterForm.get('email')?.touched"
-        >
+          [class.invalid]="RegisterForm.get('email')?.invalid && RegisterForm.get('email')?.touched"
+        />
         @if (RegisterForm.get('email')?.invalid && RegisterForm.get('email')?.touched) {
-          <div class="error-text">
+          <div class="error-message">
             @if (RegisterForm.get('email')?.errors?.['required']) {
               Email is required
             }
@@ -26,18 +29,18 @@
         }
       </div>
 
-      <!-- Password Field -->
+      <!-- Password Input -->
       <div class="form-group">
         <label for="password">Password</label>
-        <input 
-          id="password" 
-          type="password" 
-          formControlName="password" 
-          placeholder="Enter your password (min 6 characters)"
-          [class.error]="RegisterForm.get('password')?.invalid && RegisterForm.get('password')?.touched"
-        >
+        <input
+          type="password"
+          id="password"
+          formControlName="password"
+          placeholder="Create a password (min. 6 characters)"
+          [class.invalid]="RegisterForm.get('password')?.invalid && RegisterForm.get('password')?.touched"
+        />
         @if (RegisterForm.get('password')?.invalid && RegisterForm.get('password')?.touched) {
-          <div class="error-text">
+          <div class="error-message">
             @if (RegisterForm.get('password')?.errors?.['required']) {
               Password is required
             }
@@ -48,18 +51,18 @@
         }
       </div>
 
-      <!-- Confirm Password Field -->
+      <!-- Confirm Password Input -->
       <div class="form-group">
         <label for="confirmPassword">Confirm Password</label>
-        <input 
-          id="confirmPassword" 
-          type="password" 
-          formControlName="confirmPassword" 
+        <input
+          type="password"
+          id="confirmPassword"
+          formControlName="confirmPassword"
           placeholder="Confirm your password"
-          [class.error]="RegisterForm.get('confirmPassword')?.invalid && RegisterForm.get('confirmPassword')?.touched"
-        >
+          [class.invalid]="RegisterForm.get('confirmPassword')?.invalid && RegisterForm.get('confirmPassword')?.touched"
+        />
         @if (RegisterForm.get('confirmPassword')?.invalid && RegisterForm.get('confirmPassword')?.touched) {
-          <div class="error-text">
+          <div class="error-message">
             @if (RegisterForm.get('confirmPassword')?.errors?.['required']) {
               Please confirm your password
             }
@@ -70,16 +73,15 @@
         }
       </div>
 
-      <!-- Error Message -->
+      <!-- Messages -->
       @if (errorMessage) {
-        <div class="global-error">
+        <div class="alert alert-error">
           {{ errorMessage }}
         </div>
       }
-
-      <!-- Success Message -->
+      
       @if (successMessage) {
-        <div class="success-message">
+        <div class="alert alert-success">
           {{ successMessage }}
         </div>
       }
@@ -87,20 +89,19 @@
       <!-- Submit Button -->
       <button 
         type="submit" 
-        class="submit-btn"
+        class="register-btn"
         [disabled]="RegisterForm.invalid || isLoading"
       >
         @if (isLoading) {
-          <span class="spinner"></span> Creating Account...
+          <span class="spinner"></span> Creating account...
         } @else {
           Create Account
         }
       </button>
 
-      <!-- Sign In Link -->
-      <div class="signin-link">
-        Already have an account? 
-        <a routerLink="/signin" class="link">Sign in here</a>
+      <!-- Link to Login -->
+      <div class="register-links">
+        <a routerLink="/signin" class="link">Already have an account? Sign in</a>
       </div>
     </form>
   </div>
