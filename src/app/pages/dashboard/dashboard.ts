@@ -1,20 +1,38 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+
+import { Component, inject, OnInit, signal, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
+import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { AuthService } from '../../services/auth-service/auth-service';
+import { 
+  Firestore, 
+  collection, 
+  collectionData, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc,
+  Timestamp,
+  query,
+  where,
+  getDocs 
+} from '@angular/fire/firestore';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { catchError, of } from 'rxjs';
 
 interface Task {
-  id: number;
+  id: string;
   title: string;
   description: string;
   completed: boolean;
   createdAt: Date;
+  userId: string;
 }
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, ReactiveFormsModule],
   template: `
     <div class="dashboard-container">
       <!-- Header -->
@@ -51,12 +69,50 @@ interface Task {
         </div>
       </div>
 
+      <!-- Add Task Form -->
+      <div class="add-task-section">
+        <div class="section-header">
+          <h2>Add New Task</h2>
+        </div>
+        <form [formGroup]="taskForm" (ngSubmit)="addNewTask()" class="add-task-form">
+          <input 
+            type="text" 
+            placeholder="Task title" 
+            formControlName="title"
+            class="task-input"
+          >
+          @if (taskForm.get('title')?.invalid && taskForm.get('title')?.touched) {
+            <small class="error-text">Title is required (min 3 characters)</small>
+          }
+          <textarea 
+            placeholder="Task description (optional)" 
+            formControlName="description"
+            class="task-textarea"
+          ></textarea>
+          <button 
+            type="submit" 
+            class="add-task-btn" 
+            [disabled]="taskForm.invalid || addingTask()"
+          >
+            @if (addingTask()) {
+              <span class="spinner-small"></span> Adding...
+            } @else {
+              + Add Task
+            }
+          </button>
+        </form>
+      </div>
+
       <!-- Tasks Section -->
       <div class="tasks-section">
         <div class="section-header">
           <h2>Your Tasks</h2>
-          <button class="add-task-btn" (click)="addNewTask()">+ Add Task</button>
+          <button class="clear-btn" (click)="clearLocalTasks()" *ngIf="usingLocalTasks()">Clear Local Tasks</button>
+          <button class="retry-btn" (click)="retryFirebaseConnection()" *ngIf="dbError()">Retry Firebase</button>
         </div>
+
+        <!-- Error State -->
+        
 
         <!-- Tasks List -->
         @if (tasks().length === 0) {
@@ -64,7 +120,6 @@ interface Task {
             <div class="empty-icon">📋</div>
             <h3>No tasks yet</h3>
             <p>Start by adding your first task!</p>
-            <button class="primary-btn" (click)="addNewTask()">Create Your First Task</button>
           </div>
         } @else {
           <div class="tasks-list">
@@ -74,13 +129,16 @@ interface Task {
                   <input 
                     type="checkbox" 
                     [checked]="task.completed" 
-                    (change)="toggleTask(task.id)"
+                    (change)="toggleTask(task)"
                   >
                 </div>
                 <div class="task-content">
                   <h4 [class.completed-text]="task.completed">{{ task.title }}</h4>
                   <p [class.completed-text]="task.completed">{{ task.description }}</p>
                   <span class="task-date">{{ task.createdAt | date:'mediumDate' }}</span>
+                  @if (usingLocalTasks()) {
+                    <span class="local-badge">Local</span>
+                  }
                 </div>
                 <button class="delete-btn" (click)="deleteTask(task.id)">🗑️</button>
               </div>
@@ -98,6 +156,8 @@ interface Task {
           <h3>Account Information</h3>
           <p><strong>Email:</strong> {{ userEmail() }}</p>
           <p><strong>Member since:</strong> {{ memberSince() | date:'longDate' }}</p>
+          <p><strong>User ID:</strong> {{ userId() }}</p>
+          <p><strong>Storage:</strong> {{ usingLocalTasks() ? 'Local Storage' : 'Firebase Firestore' }}</p>
         </div>
       </div>
     </div>
@@ -179,6 +239,77 @@ interface Task {
       margin: 5px 0 0 0;
     }
 
+    .add-task-section {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 40px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+
+    .add-task-form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .task-input, .task-textarea {
+      padding: 12px 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 16px;
+      font-family: inherit;
+    }
+
+    .task-input:focus, .task-textarea:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .error-text {
+      color: #ff4757;
+      font-size: 12px;
+      margin-top: -5px;
+    }
+
+    .task-textarea {
+      min-height: 80px;
+      resize: vertical;
+    }
+
+    .add-task-btn {
+      align-self: flex-start;
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.3s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .add-task-btn:hover:not(:disabled) {
+      background: #5a6fd8;
+    }
+
+    .add-task-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .spinner-small {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
     .tasks-section {
       background: white;
       border-radius: 12px;
@@ -199,19 +330,56 @@ interface Task {
       margin: 0;
     }
 
-    .add-task-btn {
-      background: #667eea;
+    .clear-btn, .retry-btn {
+      background: #95a5a6;
       color: white;
       border: none;
-      padding: 12px 24px;
-      border-radius: 8px;
-      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 14px;
       cursor: pointer;
-      transition: background 0.3s;
+      margin-left: 10px;
     }
 
-    .add-task-btn:hover {
+    .retry-btn {
+      background: #667eea;
+    }
+
+    .clear-btn:hover {
+      background: #7f8c8d;
+    }
+
+    .retry-btn:hover {
       background: #5a6fd8;
+    }
+
+    .error-state {
+      background: #ffeaea;
+      border: 1px solid #ff4757;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .error-icon {
+      font-size: 40px;
+      margin-bottom: 10px;
+    }
+
+    .error-state h3 {
+      color: #ff4757;
+      margin-bottom: 10px;
+    }
+
+    .error-state p {
+      color: #666;
+      margin-bottom: 5px;
+    }
+
+    .error-detail {
+      font-size: 12px;
+      color: #999;
     }
 
     .empty-state {
@@ -234,21 +402,6 @@ interface Task {
       margin-bottom: 25px;
     }
 
-    .primary-btn {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border: none;
-      padding: 14px 32px;
-      border-radius: 8px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.3s;
-    }
-
-    .primary-btn:hover {
-      opacity: 0.9;
-    }
-
     .tasks-list {
       display: flex;
       flex-direction: column;
@@ -263,6 +416,7 @@ interface Task {
       border: 2px solid #e0e0e0;
       border-radius: 10px;
       transition: all 0.3s;
+      position: relative;
     }
 
     .task-card:hover {
@@ -309,6 +463,15 @@ interface Task {
     .task-date {
       color: #95a5a6;
       font-size: 12px;
+      margin-right: 10px;
+    }
+
+    .local-badge {
+      background: #95a5a6;
+      color: white;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 10px;
     }
 
     .delete-btn {
@@ -361,24 +524,33 @@ interface Task {
     .user-details strong {
       color: #2c3e50;
     }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
   `]
 })
 export class DashboardComponent implements OnInit {
   private authService = inject(AuthService);
   private router = inject(Router);
+  private firestore = inject(Firestore);
+  private fb = inject(FormBuilder);
+  private destroyRef = inject(DestroyRef);
 
   // User information
   userName = signal('User');
   userEmail = signal('');
   memberSince = signal(new Date());
+  userId = signal('');
 
   // Task management
-  tasks = signal<Task[]>([
-    { id: 1, title: 'Complete Angular project', description: 'Finish the authentication system', completed: true, createdAt: new Date('2024-01-20') },
-    { id: 2, title: 'Design dashboard UI', description: 'Create responsive dashboard layout', completed: true, createdAt: new Date('2024-01-21') },
-    { id: 3, title: 'Implement task management', description: 'Add CRUD operations for tasks', completed: false, createdAt: new Date('2024-01-22') },
-    { id: 4, title: 'Write documentation', description: 'Document the project structure and APIs', completed: false, createdAt: new Date('2024-01-23') },
-  ]);
+  tasks = signal<Task[]>([]);
+  addingTask = signal(false);
+  dbError = signal('');
+  usingLocalTasks = signal(false);
+
+  // Form
+  taskForm!: FormGroup;
 
   // Computed signals
   totalTasks = () => this.tasks().length;
@@ -396,34 +568,297 @@ export class DashboardComponent implements OnInit {
     // Set user info
     this.userEmail.set(user.email || '');
     this.userName.set(user.email?.split('@')[0] || 'User');
+    this.userId.set(user.uid);
     this.memberSince.set(new Date(user.metadata.creationTime || Date.now()));
+
+    // Initialize form
+    this.taskForm = this.fb.group({
+      title: ['', [Validators.required, Validators.minLength(3)]],
+      description: ['']
+    });
+
+    // Try to load tasks from Firestore, fallback to local if fails
+    this.loadTasksFromFirestore(user.uid);
+  }
+
+  // Try loading from Firestore, fallback to local storage
+  async loadTasksFromFirestore(userId: string) {
+    this.dbError.set('');
+    this.usingLocalTasks.set(false);
+    
+    try {
+      console.log('Loading tasks from Firestore for user:', userId);
+      
+      const tasksCollection = collection(this.firestore, 'tasks');
+      const userTasksQuery = query(tasksCollection, where('userId', '==', userId));
+      
+      // Try using getDocs first for better error handling
+      try {
+        const querySnapshot = await getDocs(userTasksQuery);
+        
+        if (!querySnapshot.empty) {
+          const userTasks = querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              title: data['title'] || '',
+              description: data['description'] || '',
+              completed: data['completed'] || false,
+              createdAt: data['createdAt']?.toDate() || new Date(),
+              userId: data['userId']
+            };
+          });
+          
+          this.tasks.set(userTasks);
+          this.usingLocalTasks.set(false);
+          console.log('Loaded', userTasks.length, 'tasks from Firestore');
+          
+          // Now set up real-time listener
+          this.setupFirestoreListener(userId);
+        } else {
+          console.log('No tasks found in Firestore, checking local storage');
+          this.loadTasksFromLocalStorage(userId);
+        }
+      } catch (firestoreError) {
+        console.error('Firestore query error:', firestoreError);
+        this.handleFirestoreError(firestoreError, userId);
+      }
+      
+    } catch (error) {
+      console.error('Firestore initialization error:', error);
+      this.handleFirestoreError(error, userId);
+    }
+  }
+
+  // Set up real-time Firestore listener
+  setupFirestoreListener(userId: string) {
+    try {
+      const tasksCollection = collection(this.firestore, 'tasks');
+      const userTasksQuery = query(tasksCollection, where('userId', '==', userId));
+      
+      collectionData(userTasksQuery, { idField: 'id' })
+        .pipe(
+          takeUntilDestroyed(this.destroyRef),
+          catchError(error => {
+            console.warn('Firestore listener error:', error);
+            this.dbError.set('Realtime updates disabled: ' + error.message);
+            // Don't fallback to local here, just disable realtime updates
+            return of([]);
+          })
+        )
+        .subscribe({
+          next: (tasks: any[]) => {
+            if (tasks.length > 0) {
+              const userTasks = tasks.map(task => ({
+                id: task.id,
+                title: task.title || '',
+                description: task.description || '',
+                completed: task.completed || false,
+                createdAt: task.createdAt?.toDate() || new Date(),
+                userId: task.userId
+              }));
+              
+              this.tasks.set(userTasks);
+              this.usingLocalTasks.set(false);
+              this.dbError.set('');
+            }
+          }
+        });
+    } catch (error) {
+      console.error('Error setting up Firestore listener:', error);
+    }
+  }
+
+  // Handle Firestore errors
+  private handleFirestoreError(error: any, userId: string) {
+    const errorMessage = error.message || 'Unknown Firestore error';
+    console.warn('Firestore connection failed:', errorMessage);
+    
+    this.dbError.set('Firestore: ' + errorMessage);
+    this.usingLocalTasks.set(true);
+    this.loadTasksFromLocalStorage(userId);
+  }
+
+  // Load tasks from local storage as fallback
+  loadTasksFromLocalStorage(userId: string) {
+    try {
+      const storedTasks = localStorage.getItem(`tasks_${userId}`);
+      if (storedTasks) {
+        const tasks = JSON.parse(storedTasks);
+        this.tasks.set(tasks.map((task: any) => ({
+          ...task,
+          createdAt: new Date(task.createdAt)
+        })));
+        console.log('Loaded', tasks.length, 'tasks from local storage');
+      } else {
+        console.log('No tasks found in local storage');
+      }
+    } catch (error) {
+      console.error('Error loading from local storage:', error);
+    }
+  }
+
+  // Save tasks to local storage
+  saveTasksToLocalStorage(userId: string, tasks: Task[]) {
+    try {
+      localStorage.setItem(`tasks_${userId}`, JSON.stringify(tasks));
+    } catch (error) {
+      console.error('Error saving to local storage:', error);
+    }
+  }
+
+  // Add new task (try Firestore first, fallback to local)
+  async addNewTask() {
+    if (this.taskForm.invalid) return;
+
+    const user = this.authService.getCurrentUser();
+    if (!user) return;
+
+    this.addingTask.set(true);
+
+    const newTask = {
+      title: this.taskForm.value.title,
+      description: this.taskForm.value.description,
+      completed: false,
+      createdAt: Timestamp.now(),
+      userId: user.uid
+    };
+
+    // Try Firestore first
+    if (!this.usingLocalTasks()) {
+      try {
+        const tasksCollection = collection(this.firestore, 'tasks');
+        const docRef = await addDoc(tasksCollection, newTask);
+        
+        // Add to local state with Firestore document ID
+        const taskWithId: Task = {
+          id: docRef.id,
+          title: newTask.title,
+          description: newTask.description,
+          completed: newTask.completed,
+          createdAt: newTask.createdAt.toDate(),
+          userId: newTask.userId
+        };
+        
+        this.tasks.update(tasks => [taskWithId, ...tasks]);
+        this.taskForm.reset();
+        this.addingTask.set(false);
+        console.log('Task added to Firestore with ID:', docRef.id);
+        return;
+      } catch (error) {
+        console.warn('Failed to add task to Firestore:', error);
+        this.usingLocalTasks.set(true);
+        this.dbError.set('Failed to save to Firestore. Using local storage.');
+      }
+    }
+
+    // Fallback to local storage
+    const taskId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const localTask: Task = {
+      id: taskId,
+      title: newTask.title,
+      description: newTask.description,
+      completed: newTask.completed,
+      createdAt: new Date(),
+      userId: newTask.userId
+    };
+
+    // Update local state
+    this.tasks.update(tasks => [localTask, ...tasks]);
+    
+    // Save to local storage
+    this.saveTasksToLocalStorage(user.uid, this.tasks());
+
+    // Reset form
+    this.taskForm.reset();
+    this.addingTask.set(false);
+    console.log('Task added to local storage with ID:', taskId);
+  }
+
+  // Toggle task completion
+  async toggleTask(task: Task) {
+    const updatedTask = { ...task, completed: !task.completed };
+    
+    // Update local state immediately for better UX
+    this.tasks.update(tasks => 
+      tasks.map(t => t.id === task.id ? updatedTask : t)
+    );
+
+    // Try to update in Firestore
+    if (!this.usingLocalTasks()) {
+      try {
+        const taskRef = doc(this.firestore, 'tasks', task.id);
+        await updateDoc(taskRef, { completed: updatedTask.completed });
+        console.log('Task updated in Firestore:', task.id);
+      } catch (error) {
+        console.warn('Failed to update task in Firestore:', error);
+        // Revert if Firestore fails
+        this.tasks.update(tasks => 
+          tasks.map(t => t.id === task.id ? task : t)
+        );
+      }
+    } else {
+      // Update in local storage
+      const user = this.authService.getCurrentUser();
+      if (user) {
+        this.saveTasksToLocalStorage(user.uid, this.tasks());
+      }
+    }
+  }
+
+  // Delete task
+  async deleteTask(taskId: string) {
+    if (!confirm('Are you sure you want to delete this task?')) return;
+
+    // Store the task to restore if deletion fails
+    const taskToDelete = this.tasks().find(task => task.id === taskId);
+    
+    // Update local state immediately for better UX
+    this.tasks.update(tasks => tasks.filter(task => task.id !== taskId));
+
+    // Try to delete from Firestore
+    if (!this.usingLocalTasks()) {
+      try {
+        const taskRef = doc(this.firestore, 'tasks', taskId);
+        await deleteDoc(taskRef);
+        console.log('Task deleted from Firestore:', taskId);
+      } catch (error) {
+        console.warn('Failed to delete task from Firestore:', error);
+        // Restore task if deletion failed
+        if (taskToDelete) {
+          this.tasks.update(tasks => [...tasks, taskToDelete]);
+        }
+      }
+    } else {
+      // Update in local storage
+      const user = this.authService.getCurrentUser();
+      if (user) {
+        this.saveTasksToLocalStorage(user.uid, this.tasks());
+      }
+    }
+  }
+
+  // Clear local tasks
+  clearLocalTasks() {
+    if (confirm('Clear all local tasks?')) {
+      this.tasks.set([]);
+      const user = this.authService.getCurrentUser();
+      if (user) {
+        localStorage.removeItem(`tasks_${user.uid}`);
+      }
+    }
+  }
+
+  // Retry Firebase connection
+  retryFirebaseConnection() {
+    const user = this.authService.getCurrentUser();
+    if (user) {
+      this.dbError.set('');
+      this.loadTasksFromFirestore(user.uid);
+    }
   }
 
   logout() {
     this.authService.logout();
-  }
-
-  toggleTask(taskId: number) {
-    this.tasks.update(tasks => 
-      tasks.map(task => 
-        task.id === taskId ? { ...task, completed: !task.completed } : task
-      )
-    );
-  }
-
-  deleteTask(taskId: number) {
-    this.tasks.update(tasks => tasks.filter(task => task.id !== taskId));
-  }
-
-  addNewTask() {
-    const newTask: Task = {
-      id: Date.now(),
-      title: 'New Task',
-      description: 'Task description here',
-      completed: false,
-      createdAt: new Date()
-    };
-    
-    this.tasks.update(tasks => [newTask, ...tasks]);
   }
 }
