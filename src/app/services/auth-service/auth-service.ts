@@ -8,14 +8,16 @@ import {
   sendPasswordResetEmail,
   user
 } from '@angular/fire/auth';
+import { Firestore, doc, getDoc, setDoc } from '@angular/fire/firestore';
 import { Router } from '@angular/router';
-import { Observable } from 'rxjs';
+import { Observable, from, switchMap, of } from 'rxjs';
 
 @Injectable({
   providedIn: 'root'
 })
 export class AuthService {
   private auth: Auth = inject(Auth);
+  private firestore: Firestore = inject(Firestore);
   private router = inject(Router);
 
   // Observable to track auth state
@@ -25,12 +27,36 @@ export class AuthService {
     this.user$ = user(this.auth);
   }
 
-  // Login user
+  // Get user role from Firestore
+  async getUserRole(uid: string): Promise<string> {
+    try {
+      const userDocRef = doc(this.firestore, 'users', uid);
+      const userDoc = await getDoc(userDocRef);
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        return userData['role'] || 'employee'; // Default to employee if role not found
+      } else {
+        // If user document doesn't exist, create one with default role
+        await setDoc(userDocRef, { role: 'employee', email: this.auth.currentUser?.email });
+        return 'employee';
+      }
+    } catch (error) {
+      console.error('❌ Error fetching user role:', error);
+      return 'employee'; // Default to employee on error
+    }
+  }
+
+  // Login user with role-based navigation
   async login(email: string, password: string): Promise<void> {
     try {
       const result = await signInWithEmailAndPassword(this.auth, email, password);
       console.log('✅ User signed in:', result.user.email);
-      await this.router.navigate(['/dashboard']);
+      
+      // Get user role and navigate accordingly
+      const userRole = await this.getUserRole(result.user.uid);
+      await this.navigateBasedOnRole(userRole);
+      
     } catch (error: any) {
       console.error('❌ Login failed:', error.message);
       
@@ -58,12 +84,23 @@ export class AuthService {
     }
   }
 
-  // Register new user
-  async register(email: string, password: string): Promise<void> {
+  // Register new user with default role
+  async register(email: string, password: string, role: string = 'employee'): Promise<void> {
     try {
       const result = await createUserWithEmailAndPassword(this.auth, email, password);
       console.log('✅ User registered:', result.user.email);
-      await this.router.navigate(['/dashboard']);
+      
+      // Create user document in Firestore with role
+      const userDocRef = doc(this.firestore, 'users', result.user.uid);
+      await setDoc(userDocRef, {
+        email: email,
+        role: role,
+        createdAt: new Date()
+      });
+      
+      // Navigate based on role
+      await this.navigateBasedOnRole(role);
+      
     } catch (error: any) {
       console.error('❌ Registration failed:', error.message);
       
@@ -86,6 +123,51 @@ export class AuthService {
       
       throw new Error(errorMessage);
     }
+  }
+
+  // Navigate based on user role
+  private async navigateBasedOnRole(role: string): Promise<void> {
+    switch (role) {
+      case 'admin':
+        await this.router.navigate(['/dashboard/admin']);
+        break;
+      case 'employee':
+      default:
+        await this.router.navigate(['/dashboard/employee']);
+        break;
+    }
+  }
+
+  // Get current user with role (Observable)
+  getCurrentUserWithRole(): Observable<{ user: User | null, role: string | null }> {
+    return this.user$.pipe(
+      switchMap((user) => {
+        if (user) {
+          return from(this.getUserRole(user.uid)).pipe(
+            switchMap((role) => of({ user, role }))
+          );
+        } else {
+          return of({ user: null, role: null });
+        }
+      })
+    );
+  }
+
+  // Check if user has specific role
+  async hasRole(expectedRole: string): Promise<boolean> {
+    const user = this.auth.currentUser;
+    if (!user) return false;
+    
+    const userRole = await this.getUserRole(user.uid);
+    return userRole === expectedRole;
+  }
+
+  // Get current user role
+  async getCurrentUserRole(): Promise<string | null> {
+    const user = this.auth.currentUser;
+    if (!user) return null;
+    
+    return await this.getUserRole(user.uid);
   }
 
   // Reset password

@@ -71,14 +71,19 @@ export interface ChatMessage {
 
 // Conversation Model (for chat)
 export interface Conversation {
-  id: string; // Format: "admin_id_employee_id"
+  // Update the DashboardConversation interface
+
+   id: string;
   adminId: string;
   employeeId: string;
   adminName: string;
   employeeName: string;
   lastMessage: string;
-  lastMessageTime: Date;
+  lastMessageTime: Date | any;
   unreadCount: number;
+  createdAt?: Date;
+  // Note: createdAt is not in the Conversation interface
+
 }
 
 // Notification Model

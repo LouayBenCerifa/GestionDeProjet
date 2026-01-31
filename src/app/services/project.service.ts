@@ -2,7 +2,6 @@ import { Injectable, inject } from '@angular/core';
 import {
   Firestore,
   collection,
-  collectionData,
   addDoc,
   updateDoc,
   deleteDoc,
@@ -13,7 +12,7 @@ import {
   getDocs,
   getDoc,
 } from '@angular/fire/firestore';
-import { Observable } from 'rxjs';
+import { Observable, from } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { Project, AdminDashboardStats, ProjectProgress } from '../interfaces/models';
 
@@ -28,95 +27,221 @@ export class ProjectService {
    */
   async createProject(
     adminId: string,
-    projectData: Omit<Project, 'id' | 'createdAt' | 'updatedAt' | 'completionPercentage' | 'taskCount' | 'completedTaskCount'>
+    projectData: any
   ): Promise<string> {
-    const projectsRef = collection(this.firestore, 'projects');
+    try {
+      console.log('📦 Creating project with data:', projectData);
+      
+      const projectsRef = collection(this.firestore, 'projects');
 
-    const newProject = {
-      ...projectData,
-      adminId,
-      completionPercentage: 0,
-      taskCount: 0,
-      completedTaskCount: 0,
-      startDate: Timestamp.fromDate(new Date(projectData.startDate)),
-      endDate: Timestamp.fromDate(new Date(projectData.endDate)),
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
-    };
+      // Convert dates properly
+      let startDate: Date;
+      let endDate: Date;
+      
+      if (projectData.startDate instanceof Date) {
+        startDate = projectData.startDate;
+      } else if (typeof projectData.startDate === 'string') {
+        startDate = new Date(projectData.startDate);
+      } else {
+        startDate = new Date();
+      }
+      
+      if (projectData.endDate instanceof Date) {
+        endDate = projectData.endDate;
+      } else if (typeof projectData.endDate === 'string') {
+        endDate = new Date(projectData.endDate);
+      } else {
+        endDate = new Date();
+        endDate.setMonth(endDate.getMonth() + 1);
+      }
 
-    const docRef = await addDoc(projectsRef, newProject);
-    return docRef.id;
+      const newProject = {
+        name: projectData.name || 'Untitled Project',
+        description: projectData.description || '',
+        status: projectData.status || 'planning',
+        adminId: adminId,
+        teamMembers: projectData.teamMembers || [],
+        completionPercentage: 0,
+        taskCount: 0,
+        completedTaskCount: 0,
+        startDate: Timestamp.fromDate(startDate),
+        endDate: Timestamp.fromDate(endDate),
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      };
+
+      const docRef = await addDoc(projectsRef, newProject);
+      console.log('✅ Project created with ID:', docRef.id);
+      
+      return docRef.id;
+    } catch (error) {
+      console.error('❌ Error creating project:', error);
+      throw error;
+    }
   }
 
   /**
-   * Get all projects for an admin
+   * Get all projects for an admin - USING PROMISE
+   */
+  async getAdminProjectsPromise(adminId: string): Promise<Project[]> {
+    try {
+      console.log('🔍 Getting admin projects for:', adminId);
+      
+      if (!this.firestore) {
+        console.error('❌ Firestore instance is not available');
+        return [];
+      }
+      
+      const projectsRef = collection(this.firestore, 'projects');
+      console.log('📁 Projects ref created');
+      
+      const q = query(projectsRef, where('adminId', '==', adminId));
+      console.log('🔎 Query created');
+      
+      const querySnapshot = await getDocs(q);
+      console.log('📊 Query snapshot received:', querySnapshot.size, 'documents');
+      
+      const projects: Project[] = [];
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        
+        // Convert timestamps to dates
+        const startDate = data['startDate']?.toDate 
+          ? data['startDate'].toDate() 
+          : new Date(data['startDate'] || new Date());
+        
+        const endDate = data['endDate']?.toDate 
+          ? data['endDate'].toDate() 
+          : new Date(data['endDate'] || new Date());
+        
+        const createdAt = data['createdAt']?.toDate 
+          ? data['createdAt'].toDate() 
+          : new Date(data['createdAt'] || new Date());
+        
+        const updatedAt = data['updatedAt']?.toDate 
+          ? data['updatedAt'].toDate() 
+          : new Date(data['updatedAt'] || new Date());
+        
+        const project: Project = {
+          id: doc.id,
+          name: data['name'] || 'Unnamed Project',
+          description: data['description'] || '',
+          status: data['status'] || 'planning',
+          adminId: data['adminId'] || adminId,
+          teamMembers: data['teamMembers'] || [],
+          completionPercentage: data['completionPercentage'] || 0,
+          taskCount: data['taskCount'] || 0,
+          completedTaskCount: data['completedTaskCount'] || 0,
+          startDate: startDate,
+          endDate: endDate,
+          createdAt: createdAt,
+          updatedAt: updatedAt,
+        };
+        
+        projects.push(project);
+      });
+      
+      console.log('📥 Projects loaded:', projects.length);
+      return projects;
+      
+    } catch (error) {
+      console.error('❌ Error in getAdminProjectsPromise:', error);
+      console.error('Full error:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Observable version that wraps the promise
    */
   getAdminProjects(adminId: string): Observable<Project[]> {
-    const projectsRef = collection(this.firestore, 'projects');
-    const q = query(projectsRef, where('adminId', '==', adminId));
-
-    return collectionData(q, { idField: 'id' }).pipe(
-      map((projects: any[]) =>
-        projects.map((p) => ({
-          ...p,
-          startDate: p.startDate?.toDate ? p.startDate.toDate() : p.startDate,
-          endDate: p.endDate?.toDate ? p.endDate.toDate() : p.endDate,
-          createdAt: p.createdAt?.toDate ? p.createdAt.toDate() : p.createdAt,
-          updatedAt: p.updatedAt?.toDate ? p.updatedAt.toDate() : p.updatedAt,
-        }))
-      )
-    ) as Observable<Project[]>;
+    return from(this.getAdminProjectsPromise(adminId));
   }
 
   /**
-   * Get all projects assigned to an employee
+   * Get all projects assigned to an employee - USING PROMISE
+   */
+  async getEmployeeProjectsPromise(employeeId: string): Promise<Project[]> {
+    try {
+      console.log('🔍 Getting employee projects for:', employeeId);
+      
+      const projectsRef = collection(this.firestore, 'projects');
+      const q = query(projectsRef, where('teamMembers', 'array-contains', employeeId));
+      
+      const querySnapshot = await getDocs(q);
+      const projects: Project[] = [];
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        
+        const project: Project = {
+          id: doc.id,
+          name: data['name'] || 'Unnamed Project',
+          description: data['description'] || '',
+          status: data['status'] || 'planning',
+          adminId: data['adminId'],
+          teamMembers: data['teamMembers'] || [],
+          completionPercentage: data['completionPercentage'] || 0,
+          taskCount: data['taskCount'] || 0,
+          completedTaskCount: data['completedTaskCount'] || 0,
+          startDate: data['startDate']?.toDate ? data['startDate'].toDate() : new Date(data['startDate'] || new Date()),
+          endDate: data['endDate']?.toDate ? data['endDate'].toDate() : new Date(data['endDate'] || new Date()),
+          createdAt: data['createdAt']?.toDate ? data['createdAt'].toDate() : new Date(data['createdAt'] || new Date()),
+          updatedAt: data['updatedAt']?.toDate ? data['updatedAt'].toDate() : new Date(data['updatedAt'] || new Date()),
+        };
+        
+        projects.push(project);
+      });
+      
+      console.log('📥 Employee projects loaded:', projects.length);
+      return projects;
+      
+    } catch (error) {
+      console.error('❌ Error getting employee projects:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Observable version for employee projects
    */
   getEmployeeProjects(employeeId: string): Observable<Project[]> {
-    const projectsRef = collection(this.firestore, 'projects');
-    const q = query(projectsRef, where('teamMembers', 'array-contains', employeeId));
-
-    return collectionData(q, { idField: 'id' }).pipe(
-      map((projects: any[]) =>
-        projects.map((p) => ({
-          ...p,
-          startDate: p.startDate?.toDate ? p.startDate.toDate() : p.startDate,
-          endDate: p.endDate?.toDate ? p.endDate.toDate() : p.endDate,
-          createdAt: p.createdAt?.toDate ? p.createdAt.toDate() : p.createdAt,
-          updatedAt: p.updatedAt?.toDate ? p.updatedAt.toDate() : p.updatedAt,
-        }))
-      )
-    ) as Observable<Project[]>;
+    return from(this.getEmployeeProjectsPromise(employeeId));
   }
 
   /**
    * Get single project by ID
    */
-  getProject(projectId: string): Observable<Project | null> {
-    const projectRef = doc(this.firestore, 'projects', projectId);
-
-    return collectionData(query(collection(this.firestore, 'projects'), where('__name__', '==', projectId)), {
-      idField: 'id',
-    }).pipe(
-      map((projects: any[]) =>
-        projects.length > 0
-          ? {
-              ...projects[0],
-              startDate: projects[0].startDate?.toDate
-                ? projects[0].startDate.toDate()
-                : projects[0].startDate,
-              endDate: projects[0].endDate?.toDate
-                ? projects[0].endDate.toDate()
-                : projects[0].endDate,
-              createdAt: projects[0].createdAt?.toDate
-                ? projects[0].createdAt.toDate()
-                : projects[0].createdAt,
-              updatedAt: projects[0].updatedAt?.toDate
-                ? projects[0].updatedAt.toDate()
-                : projects[0].updatedAt,
-            }
-          : null
-      )
-    ) as Observable<Project | null>;
+  async getProject(projectId: string): Promise<Project | null> {
+    try {
+      const projectRef = doc(this.firestore, 'projects', projectId);
+      const projectSnap = await getDoc(projectRef);
+      
+      if (projectSnap.exists()) {
+        const data = projectSnap.data();
+        return {
+          id: projectSnap.id,
+          name: data['name'] || 'Unnamed Project',
+          description: data['description'] || '',
+          status: data['status'] || 'planning',
+          adminId: data['adminId'],
+          teamMembers: data['teamMembers'] || [],
+          completionPercentage: data['completionPercentage'] || 0,
+          taskCount: data['taskCount'] || 0,
+          completedTaskCount: data['completedTaskCount'] || 0,
+          startDate: data['startDate']?.toDate ? data['startDate'].toDate() : new Date(data['startDate'] || new Date()),
+          endDate: data['endDate']?.toDate ? data['endDate'].toDate() : new Date(data['endDate'] || new Date()),
+          createdAt: data['createdAt']?.toDate ? data['createdAt'].toDate() : new Date(data['createdAt'] || new Date()),
+          updatedAt: data['updatedAt']?.toDate ? data['updatedAt'].toDate() : new Date(data['updatedAt'] || new Date()),
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error getting project:', error);
+      return null;
+    }
   }
 
   /**
@@ -203,50 +328,75 @@ export class ProjectService {
    * Get admin dashboard statistics
    */
   async getAdminDashboardStats(adminId: string): Promise<AdminDashboardStats> {
-    const projectsRef = collection(this.firestore, 'projects');
-    const projectsQuery = query(projectsRef, where('adminId', '==', adminId));
-    const projectsSnap = await getDocs(projectsQuery);
+    try {
+      console.log('📊 Getting admin dashboard stats for:', adminId);
+      
+      // Get projects
+      const projectsRef = collection(this.firestore, 'projects');
+      const projectsQuery = query(projectsRef, where('adminId', '==', adminId));
+      const projectsSnap = await getDocs(projectsQuery);
 
-    const totalProjects = projectsSnap.size;
-    const activeProjects = projectsSnap.docs.filter((doc) => {
-      const status = doc.data()['status'];
-      return status === 'in-progress' || status === 'planning';
-    }).length;
+      const totalProjects = projectsSnap.size;
+      const activeProjects = projectsSnap.docs.filter((doc) => {
+        const status = doc.data()['status'];
+        return status === 'in-progress' || status === 'planning';
+      }).length;
 
-    const tasksRef = collection(this.firestore, 'tasks');
-    const tasksQuery = query(tasksRef);
-    const tasksSnap = await getDocs(tasksQuery);
+      console.log('📈 Projects - Total:', totalProjects, 'Active:', activeProjects);
 
-    const totalTasks = tasksSnap.size;
-    const completedTasks = tasksSnap.docs.filter((doc) => doc.data()['status'] === 'done').length;
-    const taskCompletionRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+      // Get tasks
+      const tasksRef = collection(this.firestore, 'tasks');
+      const tasksQuery = query(tasksRef);
+      const tasksSnap = await getDocs(tasksQuery);
 
-    const usersRef = collection(this.firestore, 'users');
-    const usersQuery = query(usersRef, where('role', '==', 'employee'));
-    const usersSnap = await getDocs(usersQuery);
-    const activeEmployees = usersSnap.size;
+      const totalTasks = tasksSnap.size;
+      const completedTasks = tasksSnap.docs.filter((doc) => doc.data()['status'] === 'done').length;
+      const taskCompletionRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
 
-    const projectProgress: ProjectProgress[] = projectsSnap.docs.map((doc) => {
-      const data = doc.data();
+      console.log('📋 Tasks - Total:', totalTasks, 'Completed:', completedTasks, 'Rate:', taskCompletionRate);
+
+      // Get employees
+      const usersRef = collection(this.firestore, 'users');
+      const usersQuery = query(usersRef, where('role', '==', 'employee'));
+      const usersSnap = await getDocs(usersQuery);
+      const activeEmployees = usersSnap.size;
+
+      console.log('👥 Employees - Active:', activeEmployees);
+
+      // Get project progress
+      const projectProgress: ProjectProgress[] = projectsSnap.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          projectId: doc.id,
+          projectName: data['name'] || 'Unnamed Project',
+          progress: data['completionPercentage'] || 0,
+          tasksDone: data['completedTaskCount'] || 0,
+          tasksTotal: data['taskCount'] || 0,
+          startDate: data['startDate']?.toDate ? data['startDate'].toDate() : data['startDate'],
+          endDate: data['endDate']?.toDate ? data['endDate'].toDate() : data['endDate'],
+        };
+      });
+
       return {
-        projectId: doc.id,
-        projectName: data['name'],
-        progress: data['completionPercentage'] || 0,
-        tasksDone: data['completedTaskCount'] || 0,
-        tasksTotal: data['taskCount'] || 0,
-        startDate: data['startDate']?.toDate ? data['startDate'].toDate() : data['startDate'],
-        endDate: data['endDate']?.toDate ? data['endDate'].toDate() : data['endDate'],
+        totalProjects,
+        activeProjects,
+        totalTasks,
+        completedTasks,
+        taskCompletionRate,
+        activeEmployees,
+        projectProgress,
       };
-    });
-
-    return {
-      totalProjects,
-      activeProjects,
-      totalTasks,
-      completedTasks,
-      taskCompletionRate,
-      activeEmployees,
-      projectProgress,
-    };
+    } catch (error) {
+      console.error('Error getting admin dashboard stats:', error);
+      return {
+        totalProjects: 0,
+        activeProjects: 0,
+        totalTasks: 0,
+        completedTasks: 0,
+        taskCompletionRate: 0,
+        activeEmployees: 0,
+        projectProgress: [],
+      };
+    }
   }
 }

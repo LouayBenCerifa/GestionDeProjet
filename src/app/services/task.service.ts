@@ -77,19 +77,29 @@ export class TaskService {
    * Get all tasks assigned to an employee
    */
   getEmployeeTasks(employeeId: string): Observable<Task[]> {
-    const tasksRef = collection(this.firestore, 'tasks');
-    const q = query(tasksRef, where('assignedTo', '==', employeeId), orderBy('deadline', 'asc'));
+  const tasksRef = collection(this.firestore, 'tasks');
+  const q = query(tasksRef, where('assignedTo', '==', employeeId), orderBy('deadline', 'asc'));
 
-    return collectionData(q, { idField: 'id' }).pipe(
-      map((tasks: any[]) =>
-        tasks.map((t) => ({
+  return collectionData(q, { idField: 'id' }).pipe(
+    map((tasks: any[]) =>
+      tasks.map((t) => {
+        // Safely handle Firestore Timestamps
+        const deadline = t.deadline;
+        const createdAt = t.createdAt;
+        const updatedAt = t.updatedAt;
+        
+        return {
           ...t,
-          deadline: t.deadline?.toDate ? t.deadline.toDate() : t.deadline,
-          createdAt: t.createdAt?.toDate ? t.createdAt.toDate() : t.createdAt,
-          updatedAt: t.updatedAt?.toDate ? t.updatedAt.toDate() : t.updatedAt,
-        }))
-      )
-    ) as Observable<Task[]>;
+          deadline: deadline?.toDate ? deadline.toDate() : 
+                   (deadline instanceof Date ? deadline : new Date(deadline)),
+          createdAt: createdAt?.toDate ? createdAt.toDate() : 
+                    (createdAt instanceof Date ? createdAt : new Date(createdAt)),
+          updatedAt: updatedAt?.toDate ? updatedAt.toDate() : 
+                    (updatedAt instanceof Date ? updatedAt : new Date(updatedAt)),
+        } as Task;
+      })
+    )
+  );
   }
 
   /**

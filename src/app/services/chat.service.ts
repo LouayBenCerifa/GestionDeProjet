@@ -35,7 +35,8 @@ export class ChatService {
     recipientId: string,
     content: string
   ): Promise<string> {
-    const conversationId = this.generateConversationId(senderId, recipientId, senderRole);
+    // Use sorted IDs for consistent conversation ID
+    const conversationId = this.generateConversationId(senderId, recipientId);
 
     const messagesRef = collection(this.firestore, 'messages');
     const messageData: Omit<ChatMessage, 'id'> = {
@@ -49,22 +50,27 @@ export class ChatService {
       conversationId,
     };
 
-    const docRef = await addDoc(messagesRef, {
-      ...messageData,
-      timestamp: Timestamp.fromDate(messageData.timestamp),
-    });
+    try {
+      const docRef = await addDoc(messagesRef, {
+        ...messageData,
+        timestamp: Timestamp.fromDate(messageData.timestamp),
+      });
 
-    // Update conversation
-    await this.updateConversation(conversationId, senderId, senderName, content);
+      // Update conversation
+      await this.updateConversation(conversationId, senderId, senderName, content);
 
-    return docRef.id;
+      return docRef.id;
+    } catch (error) {
+      console.error('Error sending message:', error);
+      throw error;
+    }
   }
 
   /**
    * Get all messages in a conversation between admin and employee
    */
   getConversationMessages(adminId: string, employeeId: string): Observable<ChatMessage[]> {
-    const conversationId = this.generateConversationId(adminId, employeeId, 'admin');
+    const conversationId = this.generateConversationId(adminId, employeeId);
 
     const messagesRef = collection(this.firestore, 'messages');
     const messagesQuery = query(
@@ -143,14 +149,10 @@ export class ChatService {
   /**
    * Private helper: Generate conversation ID
    */
-  private generateConversationId(
-    userId1: string,
-    userId2: string,
-    userRole: 'admin' | 'employee'
-  ): string {
-    const adminId = userRole === 'admin' ? userId1 : userId2;
-    const employeeId = userRole === 'admin' ? userId2 : userId1;
-    return `${adminId}_${employeeId}`;
+  private generateConversationId(userId1: string, userId2: string): string {
+    // Sort IDs to ensure consistency regardless of sender/recipient order
+    const ids = [userId1, userId2].sort();
+    return `${ids[0]}_${ids[1]}`;
   }
 
   /**

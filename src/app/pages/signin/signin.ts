@@ -24,7 +24,7 @@ export class Signin implements OnInit {
     // Check if user is already logged in
     const user = this.authService.getCurrentUser();
     if (user) {
-      this.router.navigate(['/dashboard']);
+      this.router.navigate(['/dashboard-employee']);
     }
     
     this.LoginForm = this.fb.group({

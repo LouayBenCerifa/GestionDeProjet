@@ -1,17 +1,13 @@
+// app.routes.ts
 import { Routes } from '@angular/router';
 import { Signin } from './pages/signin/signin';
-import { Registre } from './pages/registre/registre';
-import { DashboardAdminComponent } from './pages/dashboard/dashboard-admin.component';
-import { DashboardEmployeeComponent } from './pages/dashboard/dashboard-employee.component';
-import { authGuard } from './guard/auth.guard';
+import { DashboardComponent } from './pages/dashboard/dashboard-new'; // Fixed import path
+import { DashboardEmployeeComponent  } from './pages/dashboard/employee-dashboard';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'signin', pathMatch: 'full' },
   { path: 'signin', component: Signin },
-  { path: 'registre', component: Registre },
-  { path: 'dashboard', component:  DashboardAdminComponent, canActivate: [authGuard] },
-  { path: 'dashboard/admin', component: DashboardAdminComponent, canActivate: [authGuard] },
-  { path: 'dashboard/employee', component: DashboardEmployeeComponent, canActivate: [authGuard] },
-  // Add more routes for main features if needed
-  { path: '**', redirectTo: 'signin' } // Fallback route
+  { path: 'dashboard/admin', component: DashboardComponent },
+  { path: 'dashboard/employee', component: DashboardEmployeeComponent  },
+  { path: '**', redirectTo: 'signin' }
 ];

@@ -1,16 +1,66 @@
-import { Component, inject, OnInit, signal, DestroyRef, computed } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  inject,
+  signal,
+  computed,
+  DestroyRef
+} from '@angular/core';
+
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
-import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
+
+import {
+  ReactiveFormsModule,
+  FormBuilder,
+  FormGroup,
+  Validators
+} from '@angular/forms';
+
 import { FormsModule } from '@angular/forms';
+
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+
+/* ===== Services ONLY ===== */
 import { AuthService } from '../../services/auth-service/auth-service';
 import { ProjectService } from '../../services/project.service';
 import { TaskService } from '../../services/task.service';
 import { ChatService } from '../../services/chat.service';
-import { Firestore, collection, getDocs, query, where, addDoc, Timestamp } from '@angular/fire/firestore';
-import { collectionData } from '@angular/fire/firestore';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Project, Task, User, AdminDashboardStats } from '../../interfaces/models';
+
+/* ===== Models ===== */
+import {
+  Project,
+  Task,
+  User,
+  AdminDashboardStats,
+  Conversation
+} from '../../interfaces/models';
+import { Firestore, collection, collectionData, query, where, getDocs, addDoc, doc, setDoc, getDoc, Timestamp, orderBy, QueryDocumentSnapshot } from '@angular/fire/firestore';
+import { Observable, Subscriber, catchError, of, timeout, from } from 'rxjs';
+
+// Interface for dashboard conversations - matches Conversation interface
+interface DashboardConversation {
+  id: string;
+  adminId: string;
+  employeeId: string;
+  adminName: string;
+  employeeName: string;
+  lastMessage: string;
+  lastMessageTime: Date | any;
+  unreadCount: number;
+}
+
+// Interface for dashboard messages
+interface DashboardMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderRole: string;
+  content: string;
+  timestamp: Date | any;
+  isRead: boolean;
+  conversationId: string;
+}
 
 @Component({
   selector: 'app-dashboard',
@@ -34,19 +84,33 @@ import { Project, Task, User, AdminDashboardStats } from '../../interfaces/model
             <h2 class="logo">📊 GestionPro</h2>
           </div>
           <nav class="sidebar-nav">
-            <a href="#dashboard" class="nav-item active" (click)="activeTab.set('dashboard')">
+            <a class="nav-item" 
+               [class.active]="activeTab() === 'dashboard'" 
+               (click)="onTabChange('dashboard', $event)">
               <span class="icon">📈</span> Dashboard
             </a>
-            <a href="#projects" class="nav-item" (click)="activeTab.set('projects')">
+            
+            <a class="nav-item" 
+               [class.active]="activeTab() === 'projects'" 
+               (click)="onTabChange('projects', $event)">
               <span class="icon">📁</span> Projects
             </a>
-            <a href="#tasks" class="nav-item" (click)="activeTab.set('tasks')">
+            
+            <a class="nav-item" 
+               [class.active]="activeTab() === 'tasks'" 
+               (click)="onTabChange('tasks', $event)">
               <span class="icon">✓</span> Tasks
             </a>
-            <a href="#chat" class="nav-item" (click)="activeTab.set('chat')">
+            
+            <a class="nav-item" 
+               [class.active]="activeTab() === 'chat'" 
+               (click)="onTabChange('chat', $event)">
               <span class="icon">💬</span> Chat
             </a>
-            <a href="#settings" class="nav-item" (click)="activeTab.set('settings')">
+            
+            <a class="nav-item" 
+               [class.active]="activeTab() === 'settings'" 
+               (click)="onTabChange('settings', $event)">
               <span class="icon">⚙️</span> Settings
             </a>
           </nav>
@@ -118,19 +182,25 @@ import { Project, Task, User, AdminDashboardStats } from '../../interfaces/model
               <div class="section">
                 <h2>Project Progress</h2>
                 <div class="project-progress-list">
-                  @for (project of dashboardStats()?.projectProgress; track project.projectId) {
-                    <div class="progress-item">
-                      <div class="progress-header">
-                        <h3>{{ project.projectName }}</h3>
-                        <span class="progress-value">{{ project.progress.toFixed(0) }}%</span>
+                  @if (dashboardStats()?.projectProgress && dashboardStats()!.projectProgress.length > 0) {
+                    @for (project of dashboardStats()!.projectProgress; track project.projectId) {
+                      <div class="progress-item">
+                        <div class="progress-header">
+                          <h3>{{ project.projectName }}</h3>
+                          <span class="progress-value">{{ project.progress.toFixed(0) }}%</span>
+                        </div>
+                        <div class="progress-bar-container">
+                          <div class="progress-bar" [style.width.%]="project.progress"></div>
+                        </div>
+                        <div class="progress-meta">
+                          <span>{{ project.tasksDone }}/{{ project.tasksTotal }} tasks completed</span>
+                          <span>Due: {{ project.endDate | date: 'MMM dd, yyyy' }}</span>
+                        </div>
                       </div>
-                      <div class="progress-bar-container">
-                        <div class="progress-bar" [style.width.%]="project.progress"></div>
-                      </div>
-                      <div class="progress-meta">
-                        <span>{{ project.tasksDone }}/{{ project.tasksTotal }} tasks completed</span>
-                        <span>Due: {{ project.endDate | date: 'MMM dd, yyyy' }}</span>
-                      </div>
+                    }
+                  } @else {
+                    <div class="empty-state">
+                      <p>No projects yet. Create your first project!</p>
                     </div>
                   }
                 </div>
@@ -143,7 +213,10 @@ import { Project, Task, User, AdminDashboardStats } from '../../interfaces/model
             <section class="content">
               <div class="section-header">
                 <h2>Manage Projects</h2>
-                <button class="btn btn-primary" (click)="toggleCreateProjectForm()">+ New Project</button>
+                <div style="display: flex; gap: 10px;">
+                  <button class="btn btn-primary" (click)="toggleCreateProjectForm()">+ New Project</button>
+                  <button class="btn btn-secondary" (click)="createTestProject()" style="background: #f59e0b;">Test Project</button>
+                </div>
               </div>
 
               @if (showCreateProjectForm()) {
@@ -151,19 +224,41 @@ import { Project, Task, User, AdminDashboardStats } from '../../interfaces/model
                   <h3>Create New Project</h3>
                   <form [formGroup]="projectForm" (ngSubmit)="createProject()" class="form">
                     <input type="text" placeholder="Project Name" formControlName="name" class="input">
+                    @if (projectForm.get('name')?.invalid && projectForm.get('name')?.touched) {
+                      <small class="error">Project name is required (min 3 characters)</small>
+                    }
                     <textarea placeholder="Description" formControlName="description" class="textarea"></textarea>
+                    @if (projectForm.get('description')?.invalid && projectForm.get('description')?.touched) {
+                      <small class="error">Description is required</small>
+                    }
                     <div class="date-row">
-                      <input type="date" formControlName="startDate" class="input">
-                      <input type="date" formControlName="endDate" class="input">
+                      <div>
+                        <label>Start Date</label>
+                        <input type="date" formControlName="startDate" class="input">
+                        @if (projectForm.get('startDate')?.invalid && projectForm.get('startDate')?.touched) {
+                          <small class="error">Start date is required</small>
+                        }
+                      </div>
+                      <div>
+                        <label>End Date</label>
+                        <input type="date" formControlName="endDate" class="input">
+                        @if (projectForm.get('endDate')?.invalid && projectForm.get('endDate')?.touched) {
+                          <small class="error">End date is required</small>
+                        }
+                      </div>
                     </div>
                     <select formControlName="status" class="input">
                       <option value="">Select Status</option>
                       <option value="planning">Planning</option>
                       <option value="in-progress">In Progress</option>
                       <option value="on-hold">On Hold</option>
+                      <option value="completed">Completed</option>
                     </select>
+                    @if (projectForm.get('status')?.invalid && projectForm.get('status')?.touched) {
+                      <small class="error">Status is required</small>
+                    }
                     <div class="form-actions">
-                      <button type="submit" class="btn btn-primary">Create Project</button>
+                      <button type="submit" class="btn btn-primary" [disabled]="!projectForm.valid">Create Project</button>
                       <button type="button" class="btn btn-secondary" (click)="toggleCreateProjectForm()">Cancel</button>
                     </div>
                   </form>
@@ -171,28 +266,41 @@ import { Project, Task, User, AdminDashboardStats } from '../../interfaces/model
               }
 
               <div class="projects-grid">
-                @for (project of projects(); track project.id) {
-                  <div class="project-card">
-                    <div class="project-header">
-                      <h3>{{ project.name }}</h3>
-                      <div class="project-actions">
-                        <button class="btn-icon" (click)="editProject(project)">✏️</button>
-                        <button class="btn-icon" (click)="deleteProject(project.id)">🗑️</button>
+                @if (projects().length > 0) {
+                  @for (project of projects(); track project.id) {
+                    <div class="project-card">
+                      <div class="project-header">
+                        <h3>{{ project.name || 'Unnamed Project' }}</h3>
+                        <div class="project-actions">
+                          <button class="btn-icon" (click)="editProject(project)">✏️</button>
+                          <button class="btn-icon" (click)="deleteProject(project.id)">🗑️</button>
+                        </div>
+                      </div>
+                      <p class="project-description">{{ project.description || 'No description' }}</p>
+                      <div class="project-meta">
+                        <span class="badge" 
+                              [class.status-planning]="project.status === 'planning'" 
+                              [class.status-in-progress]="project.status === 'in-progress'"
+                              [class.status-on-hold]="project.status === 'on-hold'"
+                              [class.status-completed]="project.status === 'completed'">
+                          {{ project.status || 'planning' | titlecase }}
+                        </span>
+                        <span>Team: {{ (project.teamMembers || []).length }} members</span>
+                        <span>Tasks: {{ project.taskCount || 0 }}</span>
+                      </div>
+                      <div class="progress-bar-container">
+                        <div class="progress-bar" [style.width.%]="project.completionPercentage || 0"></div>
+                      </div>
+                      <p class="progress-text">{{ (project.completionPercentage || 0).toFixed(0) }}% complete</p>
+                      <div class="project-dates">
+                        <small>Start: {{ project.startDate | date: 'MMM dd, yyyy' }}</small>
+                        <small>End: {{ project.endDate | date: 'MMM dd, yyyy' }}</small>
                       </div>
                     </div>
-                    <p class="project-description">{{ project.description }}</p>
-                    <div class="project-meta">
-                      <span class="badge" [class.status-planning]="project.status === 'planning'" 
-                            [class.status-in-progress]="project.status === 'in-progress'"
-                            [class.status-completed]="project.status === 'completed'">
-                        {{ project.status | titlecase }}
-                      </span>
-                      <span>Team: {{ project.teamMembers.length || 0 }} members</span>
-                    </div>
-                    <div class="progress-bar-container">
-                      <div class="progress-bar" [style.width.%]="project.completionPercentage"></div>
-                    </div>
-                    <p class="progress-text">{{ project.completionPercentage.toFixed(0) }}% complete</p>
+                  }
+                } @else {
+                  <div class="empty-state">
+                    <p>No projects yet. Create your first project!</p>
                   </div>
                 }
               </div>
@@ -213,15 +321,23 @@ import { Project, Task, User, AdminDashboardStats } from '../../interfaces/model
                   <form [formGroup]="taskForm" (ngSubmit)="createTask()" class="form">
                     <select formControlName="projectId" class="input">
                       <option value="">Select Project</option>
-                      @for (proj of projects(); track proj.id) {
-                        <option [value]="proj.id">{{ proj.name }}</option>
+                      @if (projects().length > 0) {
+                        @for (proj of projects(); track proj.id) {
+                          <option [value]="proj.id">{{ proj.name }}</option>
+                        }
+                      } @else {
+                        <option value="" disabled>No projects available. Create a project first.</option>
                       }
                     </select>
 
                     <select formControlName="assignedTo" class="input">
                       <option value="">Assign To Employee</option>
-                      @for (emp of employees(); track emp.id) {
-                        <option [value]="emp.id">{{ emp.name }} ({{ emp.email }})</option>
+                      @if (employees().length > 0) {
+                        @for (emp of employees(); track emp.id) {
+                          <option [value]="emp.id">{{ emp.name }} ({{ emp.email }})</option>
+                        }
+                      } @else {
+                        <option value="" disabled>No employees available</option>
                       }
                     </select>
 
@@ -240,7 +356,7 @@ import { Project, Task, User, AdminDashboardStats } from '../../interfaces/model
                     </div>
 
                     <div class="form-actions">
-                      <button type="submit" class="btn btn-primary">Create Task</button>
+                      <button type="submit" class="btn btn-primary" [disabled]="!taskForm.valid || projects().length === 0 || employees().length === 0">Create Task</button>
                       <button type="button" class="btn btn-secondary" (click)="toggleCreateTaskForm()">Cancel</button>
                     </div>
                   </form>
@@ -248,28 +364,34 @@ import { Project, Task, User, AdminDashboardStats } from '../../interfaces/model
               }
 
               <div class="tasks-list">
-                @for (task of tasks(); track task.id) {
-                  <div class="task-card">
-                    <div class="task-header">
-                      <h3>{{ task.title }}</h3>
-                      <span class="priority-badge" [class]="'priority-' + task.priority">{{ task.priority | uppercase }}</span>
+                @if (tasks().length > 0) {
+                  @for (task of tasks(); track task.id) {
+                    <div class="task-card">
+                      <div class="task-header">
+                        <h3>{{ task.title }}</h3>
+                        <span class="priority-badge" [class]="'priority-' + task.priority">{{ task.priority | uppercase }}</span>
+                      </div>
+                      <p>{{ task.description }}</p>
+                      <div class="task-meta">
+                        <span>👤 Assigned to: {{ getEmployeeName(task.assignedTo) }}</span>
+                        <span>📅 Deadline: {{ task.deadline | date: 'MMM dd, yyyy' }}</span>
+                      </div>
+                      <div class="task-status">
+                        <span class="status-badge" [class]="'status-' + task.status">{{ task.status | titlecase }}</span>
+                        <span>{{ task.completionPercentage }}%</span>
+                      </div>
+                      <div class="progress-bar-container">
+                        <div class="progress-bar" [style.width.%]="task.completionPercentage"></div>
+                      </div>
+                      <div class="task-actions">
+                        <button class="btn-small" (click)="editTask(task)">Edit</button>
+                        <button class="btn-small" (click)="deleteTask(task.id)">Delete</button>
+                      </div>
                     </div>
-                    <p>{{ task.description }}</p>
-                    <div class="task-meta">
-                      <span>👤 Assigned to: {{ getEmployeeName(task.assignedTo) }}</span>
-                      <span>📅 Deadline: {{ task.deadline | date: 'MMM dd, yyyy' }}</span>
-                    </div>
-                    <div class="task-status">
-                      <span class="status-badge" [class]="'status-' + task.status">{{ task.status | titlecase }}</span>
-                      <span>{{ task.completionPercentage }}%</span>
-                    </div>
-                    <div class="progress-bar-container">
-                      <div class="progress-bar" [style.width.%]="task.completionPercentage"></div>
-                    </div>
-                    <div class="task-actions">
-                      <button class="btn-small" (click)="editTask(task)">Edit</button>
-                      <button class="btn-small" (click)="deleteTask(task.id)">Delete</button>
-                    </div>
+                  }
+                } @else {
+                  <div class="empty-state">
+                    <p>No tasks yet. Create your first task!</p>
                   </div>
                 }
               </div>
@@ -287,20 +409,26 @@ import { Project, Task, User, AdminDashboardStats } from '../../interfaces/model
                 <div class="chat-sidebar">
                   <h3>Conversations</h3>
                   <div class="conversations-list">
-                    @for (conv of conversations(); track conv.id) {
-                      <div class="conversation-item" 
-                           [class.active]="selectedConversation()?.id === conv.id"
-                           (click)="selectConversation(conv)">
-                        <div class="conv-avatar">
-                          <img [src]="'https://ui-avatars.com/api/?name=' + conv.employeeName" alt="Employee">
+                    @if (conversations().length > 0) {
+                      @for (conv of conversations(); track conv.id) {
+                        <div class="conversation-item" 
+                             [class.active]="selectedConversation()?.id === conv.id"
+                             (click)="selectConversation(conv, $event)">
+                          <div class="conv-avatar">
+                            <img [src]="'https://ui-avatars.com/api/?name=' + conv.employeeName" alt="Employee">
+                          </div>
+                          <div class="conv-info">
+                            <h4>{{ conv.employeeName }}</h4>
+                            <p class="conv-preview">{{ conv.lastMessage }}</p>
+                          </div>
+                          @if (conv.unreadCount > 0) {
+                            <span class="unread-badge">{{ conv.unreadCount }}</span>
+                          }
                         </div>
-                        <div class="conv-info">
-                          <h4>{{ conv.employeeName }}</h4>
-                          <p class="conv-preview">{{ conv.lastMessage }}</p>
-                        </div>
-                        @if (conv.unreadCount > 0) {
-                          <span class="unread-badge">{{ conv.unreadCount }}</span>
-                        }
+                      }
+                    } @else {
+                      <div class="empty-conversations">
+                        <p>No conversations yet</p>
                       </div>
                     }
                   </div>
@@ -312,12 +440,18 @@ import { Project, Task, User, AdminDashboardStats } from '../../interfaces/model
                       <h3>Chat with {{ selectedConversation()?.employeeName }}</h3>
                     </div>
                     <div class="messages-container">
-                      @for (msg of chatMessages(); track msg.id) {
-                        <div class="message" [class.sent]="msg.senderId === currentUserId()">
-                          <div class="message-bubble">
-                            <p>{{ msg.content }}</p>
-                            <small>{{ msg.timestamp | date: 'HH:mm' }}</small>
+                      @if (chatMessages().length > 0) {
+                        @for (msg of chatMessages(); track msg.id) {
+                          <div class="message" [class.sent]="msg.senderId === currentUserId()">
+                            <div class="message-bubble">
+                              <p>{{ msg.content }}</p>
+                              <small>{{ msg.timestamp | date: 'HH:mm' }}</small>
+                            </div>
                           </div>
+                        }
+                      } @else {
+                        <div class="no-messages">
+                          <p>No messages yet. Start the conversation!</p>
                         </div>
                       }
                     </div>
@@ -348,6 +482,7 @@ import { Project, Task, User, AdminDashboardStats } from '../../interfaces/model
                 <p><strong>Name:</strong> {{ userName() }}</p>
                 <p><strong>Email:</strong> {{ userEmail() }}</p>
                 <p><strong>Role:</strong> Administrator</p>
+                <p><strong>User ID:</strong> {{ currentUserId() }}</p>
               </div>
             </section>
           }
@@ -355,7 +490,7 @@ import { Project, Task, User, AdminDashboardStats } from '../../interfaces/model
       }
     </div>
   `,
-  styles: [`
+  styles: `
     .dashboard-container {
       display: flex;
       height: 100vh;
@@ -372,10 +507,20 @@ import { Project, Task, User, AdminDashboardStats } from '../../interfaces/model
       gap: 20px;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
+      padding: 20px;
+      text-align: center;
     }
 
     .denied-icon {
       font-size: 80px;
+    }
+
+    .user-role-info {
+      font-size: 16px;
+      margin: 10px 0;
+      background: rgba(255, 255, 255, 0.2);
+      padding: 10px 20px;
+      border-radius: 8px;
     }
 
     .back-btn {
@@ -440,6 +585,10 @@ import { Project, Task, User, AdminDashboardStats } from '../../interfaces/model
     .nav-item.active {
       background: #f0f4ff;
       color: #667eea;
+    }
+
+    .nav-item:hover {
+      text-decoration: none;
     }
 
     .nav-item .icon {
@@ -693,6 +842,12 @@ import { Project, Task, User, AdminDashboardStats } from '../../interfaces/model
       background: #d1d5db;
     }
 
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
     .btn-icon {
       width: 36px;
       height: 36px;
@@ -754,10 +909,25 @@ import { Project, Task, User, AdminDashboardStats } from '../../interfaces/model
       gap: 16px;
     }
 
+    .date-row label, .form-row label {
+      display: block;
+      margin-bottom: 8px;
+      color: #6b7280;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
     .form-actions {
       display: flex;
       gap: 12px;
       margin-top: 10px;
+    }
+
+    .error {
+      color: #ef4444;
+      font-size: 12px;
+      margin-top: 4px;
+      display: block;
     }
 
     /* Projects & Tasks Grid */
@@ -805,6 +975,7 @@ import { Project, Task, User, AdminDashboardStats } from '../../interfaces/model
       align-items: center;
       margin-bottom: 12px;
       font-size: 13px;
+      flex-wrap: wrap;
     }
 
     .badge {
@@ -824,6 +995,11 @@ import { Project, Task, User, AdminDashboardStats } from '../../interfaces/model
       color: #b45309;
     }
 
+    .status-on-hold {
+      background: #f3f4f6;
+      color: #6b7280;
+    }
+
     .status-completed {
       background: #dcfce7;
       color: #166534;
@@ -832,7 +1008,15 @@ import { Project, Task, User, AdminDashboardStats } from '../../interfaces/model
     .progress-text {
       color: #667eea;
       font-weight: 600;
+      margin: 12px 0 8px 0;
+    }
+
+    .project-dates {
+      display: flex;
+      justify-content: space-between;
       margin-top: 12px;
+      font-size: 12px;
+      color: #6b7280;
     }
 
     /* Task Styles */
@@ -1112,6 +1296,21 @@ import { Project, Task, User, AdminDashboardStats } from '../../interfaces/model
       color: #9ca3af;
     }
 
+    .no-messages {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: #9ca3af;
+      font-style: italic;
+    }
+
+    .empty-conversations {
+      text-align: center;
+      padding: 20px;
+      color: #9ca3af;
+    }
+
     /* Settings */
     .settings-card {
       background: white;
@@ -1128,6 +1327,17 @@ import { Project, Task, User, AdminDashboardStats } from '../../interfaces/model
     .settings-card p {
       margin: 12px 0;
       color: #4b5563;
+    }
+
+    /* Empty States */
+    .empty-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 40px;
+      color: #9ca3af;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
     }
 
     @media (max-width: 768px) {
@@ -1166,8 +1376,12 @@ import { Project, Task, User, AdminDashboardStats } from '../../interfaces/model
         width: 100%;
         max-height: 250px;
       }
+
+      .date-row, .form-row {
+        grid-template-columns: 1fr;
+      }
     }
-  `],
+  `,
 })
 export class DashboardComponent implements OnInit {
   private authService = inject(AuthService);
@@ -1189,27 +1403,32 @@ export class DashboardComponent implements OnInit {
   projects = signal<Project[]>([]);
   tasks = signal<Task[]>([]);
   employees = signal<User[]>([]);
-  conversations = signal<any[]>([]);
-  chatMessages = signal<any[]>([]);
+  conversations = signal<DashboardConversation[]>([]);
+  chatMessages = signal<DashboardMessage[]>([]);
 
   dashboardStats = signal<AdminDashboardStats | null>(null);
 
   activeTab = signal<'dashboard' | 'projects' | 'tasks' | 'chat' | 'settings'>('dashboard');
   showCreateProjectForm = signal(false);
   showCreateTaskForm = signal(false);
-  selectedConversation = signal<any>(null);
+  selectedConversation = signal<DashboardConversation | null>(null);
   chatMessage = '';
 
   projectForm!: FormGroup;
   taskForm!: FormGroup;
 
   ngOnInit() {
+    console.log('🚀 Admin Dashboard initialized');
     const user = this.authService.getCurrentUser();
     if (user) {
       this.currentUserId.set(user.uid);
-      this.userName.set(user.displayName || user.email || '');
+      this.userName.set(user.displayName || user.email || 'Admin');
       this.userEmail.set(user.email || '');
+      console.log('👤 User loaded:', user.email, 'UID:', user.uid);
       this.checkUserRole();
+    } else {
+      console.warn('No user found, redirecting to signin');
+      this.router.navigate(['/signin']);
     }
 
     this.initializeForms();
@@ -1224,51 +1443,301 @@ export class DashboardComponent implements OnInit {
       getDocs(q).then((snap) => {
         if (snap.docs.length > 0) {
           const user = snap.docs[0].data();
-          this.isAdmin.set(user['role'] === 'admin');
-          this.userRole.set(user['role']);
+          const role = user['role'] || '';
+          this.isAdmin.set(role === 'admin');
+          this.userRole.set(role);
+          console.log('🎯 User role:', role, 'Is admin:', this.isAdmin());
 
           if (this.isAdmin()) {
             this.loadAdminDashboard();
+          } else {
+            console.warn('User is not admin, redirecting to employee dashboard');
+            this.router.navigate(['/dashboard/employee']);
           }
+        } else {
+          console.warn('No user document found in Firestore');
+          this.router.navigate(['/signin']);
         }
+      }).catch((error) => {
+        console.error('Error checking user role:', error);
       });
     }
   }
 
   loadAdminDashboard() {
     const adminId = this.currentUserId();
+    console.log('📊 Loading admin dashboard for:', adminId);
+
+    if (!adminId) {
+      console.error('❌ No admin ID available');
+      return;
+    }
 
     // Load projects
-    this.projectService.getAdminProjects(adminId)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((projects) => this.projects.set(projects));
+    this.loadAdminProjects();
 
     // Load tasks
-    const tasksRef = collection(this.firestore, 'tasks');
-    collectionData(query(tasksRef), { idField: 'id' })
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((tasks: any) => {
-        this.tasks.set(tasks.map((t: any) => ({
-          ...t,
-          deadline: t.deadline?.toDate ? t.deadline.toDate() : t.deadline,
-        })));
-      });
+    this.loadTasks();
 
     // Load employees
-    const usersRef = collection(this.firestore, 'users');
-    collectionData(query(usersRef, where('role', '==', 'employee')), { idField: 'id' })
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((employees: any) => this.employees.set(employees));
-
-    // Load conversations
-    this.chatService.getUserConversations(adminId, 'admin')
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((conversations) => this.conversations.set(conversations));
+    this.loadEmployees();
 
     // Load dashboard stats
-    this.projectService.getAdminDashboardStats(adminId).then((stats) => {
-      this.dashboardStats.set(stats);
-    });
+    this.loadDashboardStats(adminId);
+
+    // Don't load conversations on init - only when chat tab is selected
+  }
+
+  loadAdminProjects() {
+    const adminId = this.currentUserId();
+    console.log('🔄 Loading projects for admin:', adminId);
+    
+    if (!adminId) {
+      console.error('❌ No admin ID found');
+      return;
+    }
+
+    try {
+      this.projectService.getAdminProjects(adminId)
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (projects) => {
+            console.log('📥 Projects loaded successfully:', projects.length);
+            if (projects.length > 0) {
+              console.log('📊 Sample project:', {
+                id: projects[0].id,
+                name: projects[0].name,
+                status: projects[0].status
+              });
+            }
+            this.projects.set(projects);
+          },
+          error: (error) => {
+            console.error('❌ Error loading projects:', error);
+          }
+        });
+    } catch (error) {
+      console.error('❌ Exception in loadAdminProjects:', error);
+    }
+  }
+
+  loadTasks() {
+    console.log('📋 Loading tasks...');
+    const tasksRef = collection(this.firestore, 'tasks');
+    getDocs(tasksRef)
+      .then((querySnapshot) => {
+        const tasks: Task[] = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          const task: Task = {
+            id: doc.id,
+            projectId: data['projectId'] || '',
+            title: data['title'] || '',
+            description: data['description'] || '',
+            assignedTo: data['assignedTo'] || '',
+            assignedBy: data['assignedBy'] || '',
+            deadline: data['deadline']?.toDate ? data['deadline'].toDate() : data['deadline'],
+            priority: data['priority'] || 'medium',
+            status: data['status'] || 'todo',
+            completionPercentage: data['completionPercentage'] || 0,
+            comments: data['comments'] || [],
+            createdAt: data['createdAt']?.toDate ? data['createdAt'].toDate() : new Date(),
+            updatedAt: data['updatedAt']?.toDate ? data['updatedAt'].toDate() : new Date()
+          };
+          tasks.push(task);
+        });
+        console.log('📋 Tasks loaded:', tasks.length);
+        this.tasks.set(tasks);
+      })
+      .catch((error) => {
+        console.error('❌ Error loading tasks:', error);
+      });
+  }
+
+  loadEmployees() {
+    console.log('👥 Loading employees...');
+    const usersRef = collection(this.firestore, 'users');
+    const q = query(usersRef, where('role', '==', 'employee'));
+    
+    getDocs(q)
+      .then((querySnapshot) => {
+        const employees: User[] = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          const employee: User = {
+            id: doc.id,
+            email: data['email'] || '',
+            name: data['name'] || '',
+            role: data['role'] || 'employee',
+            createdAt: data['createdAt']?.toDate ? data['createdAt'].toDate() : new Date(),
+          };
+          employees.push(employee);
+        });
+        console.log('👥 Employees loaded:', employees.length);
+        this.employees.set(employees);
+      })
+      .catch((error) => {
+        console.error('❌ Error loading employees:', error);
+      });
+  }
+
+  loadDashboardStats(adminId: string) {
+    console.log('📈 Loading dashboard stats...');
+    this.projectService.getAdminDashboardStats(adminId)
+      .then((stats) => {
+        console.log('📈 Dashboard stats loaded:', stats);
+        this.dashboardStats.set(stats);
+      })
+      .catch((error) => {
+        console.error('❌ Error loading dashboard stats:', error);
+      });
+  }
+
+  // ULTIMATE FIX: Use getDocs() instead of collectionData() to avoid Firestore reference issues
+  // Change this in loadConversationsUltimate method:
+loadConversationsUltimate(adminId: string) {
+  console.log('💬 Loading conversations using getDocs() for admin:', adminId);
+  
+  if (!adminId) {
+    console.error('❌ No admin ID provided');
+    this.conversations.set([]);
+    return;
+  }
+
+  try {
+    // Add a guard to ensure we're in a proper context
+    const firestore = this.firestore; // Store reference locally
+    
+    const conversationsRef = collection(firestore, 'conversations');
+    const q = query(
+      conversationsRef, 
+      where('adminId', '==', adminId),
+      orderBy('lastMessageTime', 'desc')
+    );
+
+    // Use getDocs() directly
+    getDocs(q)
+      .then((snapshot) => {
+        const conversations: DashboardConversation[] = snapshot.docs.map((doc: any) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            adminId: data['adminId'] || adminId,
+            employeeId: data['employeeId'] || '',
+            adminName: data['adminName'] || 'Admin',
+            employeeName: data['employeeName'] || 'Employee',
+            lastMessage: data['lastMessage'] || 'No messages yet',
+            lastMessageTime: data['lastMessageTime']?.toDate ? 
+              data['lastMessageTime'].toDate() : data['lastMessageTime'],
+            unreadCount: data['unreadCount'] || 0
+          };
+        });
+        
+        console.log('✅ Conversations loaded with getDocs():', conversations.length);
+        this.conversations.set(conversations);
+        
+        // Auto-select first conversation if none selected
+        if (conversations.length > 0 && !this.selectedConversation()) {
+          this.selectConversationUltimate(conversations[0]);
+        }
+      })
+      .catch((error) => {
+        console.error('❌ Error loading conversations with getDocs:', error);
+        
+        // If it's an index error, provide helpful information
+        if (error.code === 'failed-precondition') {
+          console.error('🔧 Firestore index required! Please create a composite index for:');
+          console.error('   - Collection: conversations');
+          console.error('   - Fields: adminId (asc), lastMessageTime (desc)');
+          console.error('   Or click the link in the error message above');
+        }
+        
+        this.conversations.set([]);
+      });
+  } catch (error) {
+    console.error('❌ Exception in loadConversationsUltimate:', error);
+    this.conversations.set([]);
+  }
+}
+
+  selectConversationUltimate(conv: DashboardConversation, event?: Event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    
+    console.log('🎯 Selecting conversation with:', conv.employeeName);
+    
+    const user = this.authService.getCurrentUser();
+    if (!user) {
+      console.warn('Not authenticated for conversation selection');
+      return;
+    }
+    
+    this.selectedConversation.set(conv);
+    
+    // Load messages using getDocs() to avoid Firestore reference issues
+    this.loadMessagesUltimate(this.currentUserId(), conv.employeeId);
+  }
+
+  loadMessagesUltimate(userId1: string, userId2: string) {
+    console.log('📨 Loading messages between', userId1, 'and', userId2);
+    
+    try {
+      const messagesRef = collection(this.firestore, 'messages');
+      
+      // Generate conversation ID both ways
+      const conversationId1 = `${userId1}_${userId2}`;
+      const conversationId2 = `${userId2}_${userId1}`;
+      
+      const q = query(
+        messagesRef,
+        where('conversationId', 'in', [conversationId1, conversationId2]),
+        orderBy('timestamp', 'asc')
+      );
+
+      // Use getDocs() instead of collectionData()
+      from(getDocs(q))
+        .pipe(
+          takeUntilDestroyed(this.destroyRef),
+          catchError((error) => {
+            console.error('❌ Error loading messages with getDocs:', error);
+            return of({ docs: [] } as any);
+          })
+        )
+        .subscribe({
+          next: (snapshot) => {
+            const messages: DashboardMessage[] = snapshot.docs.map((doc: QueryDocumentSnapshot) => {
+              const data = doc.data();
+              return {
+                id: doc.id,
+                senderId: data['senderId'] || '',
+                senderName: data['senderName'] || '',
+                senderRole: data['senderRole'] || 'employee',
+                content: data['content'] || '',
+                timestamp: data['timestamp']?.toDate ? data['timestamp'].toDate() : data['timestamp'],
+                isRead: data['isRead'] || false,
+                conversationId: data['conversationId'] || ''
+              };
+            });
+            
+            console.log('✅ Messages loaded with getDocs():', messages.length);
+            this.chatMessages.set(messages);
+            
+            // Auto-scroll to bottom
+            setTimeout(() => {
+              this.scrollToBottom();
+            }, 100);
+          },
+          error: (error) => {
+            console.error('❌ Subscription error in loadMessagesUltimate:', error);
+            this.chatMessages.set([]);
+          }
+        });
+    } catch (error) {
+      console.error('❌ Exception in loadMessagesUltimate:', error);
+      this.chatMessages.set([]);
+    }
   }
 
   initializeForms() {
@@ -1290,16 +1759,100 @@ export class DashboardComponent implements OnInit {
     });
   }
 
+  onTabChange(tab: 'dashboard' | 'projects' | 'tasks' | 'chat' | 'settings', event?: Event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    
+    console.log('Admin tab clicked:', tab, 'Auth state:', this.authService.getCurrentUser()?.email);
+    
+    const user = this.authService.getCurrentUser();
+    if (!user) {
+      console.warn('Admin not authenticated when switching tabs');
+      return;
+    }
+    
+    if (this.userRole() !== 'admin') {
+      console.warn('User is not admin, cannot access admin dashboard');
+      return;
+    }
+    
+    this.activeTab.set(tab);
+    
+    // Load data based on tab
+    switch (tab) {
+      case 'projects':
+        this.loadAdminProjects();
+        break;
+      case 'tasks':
+        this.loadTasks();
+        break;
+      case 'chat':
+        // Use the ULTIMATE fix method to load conversations
+        this.loadConversationsUltimate(this.currentUserId());
+        break;
+    }
+  }
+
   createProject() {
     if (this.projectForm.valid) {
       const adminId = this.currentUserId();
-      this.projectService.createProject(adminId, {
-        ...this.projectForm.value,
-        teamMembers: [],
-      }).then(() => {
-        this.projectForm.reset();
-        this.showCreateProjectForm.set(false);
-      });
+      const formValue = this.projectForm.value;
+      
+      console.log('📋 Form values:', formValue);
+      
+      const projectData = {
+        name: formValue.name,
+        description: formValue.description,
+        startDate: formValue.startDate,
+        endDate: formValue.endDate,
+        status: formValue.status || 'planning',
+        adminId: adminId,
+        teamMembers: []
+      };
+
+      console.log('📤 Creating project with data:', projectData);
+
+      this.projectService.createProject(adminId, projectData)
+        .then((projectId) => {
+          console.log('✅ Project created with ID:', projectId);
+          this.projectForm.reset();
+          this.showCreateProjectForm.set(false);
+          this.loadAdminProjects();
+        })
+        .catch((error) => {
+          console.error('❌ Error creating project:', error);
+          alert('Error creating project: ' + error.message);
+        });
+    } else {
+      console.warn('Form is invalid');
+      this.projectForm.markAllAsTouched();
+    }
+  }
+
+  async createTestProject() {
+    const adminId = this.currentUserId();
+    console.log('🧪 Creating test project...');
+    
+    const testProject = {
+      name: 'Test Project ' + new Date().getTime(),
+      description: 'This is a test project created for debugging',
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      status: 'planning',
+      adminId: adminId,
+      teamMembers: []
+    };
+
+    try {
+      const projectId = await this.projectService.createProject(adminId, testProject);
+      console.log('✅ Test project created with ID:', projectId);
+      alert('Test project created successfully!');
+      this.loadAdminProjects();
+    } catch (error: any) {
+      console.error('❌ Failed to create test project:', error);
+      alert('Error: ' + error.message);
     }
   }
 
@@ -1308,20 +1861,39 @@ export class DashboardComponent implements OnInit {
       const adminId = this.currentUserId();
       const { projectId, assignedTo, ...taskData } = this.taskForm.value;
 
+      console.log('📝 Creating task for project:', projectId);
+
       this.taskService.createTask(projectId, adminId, assignedTo, {
         ...taskData,
+        assignedBy: adminId,
         status: 'todo',
         completionPercentage: 0,
       }).then(() => {
+        console.log('✅ Task created successfully');
         this.taskForm.reset();
         this.showCreateTaskForm.set(false);
+      }).catch((error) => {
+        console.error('❌ Error creating task:', error);
+        alert('Error creating task: ' + error.message);
       });
+    } else {
+      console.warn('Task form is invalid');
+      this.taskForm.markAllAsTouched();
     }
   }
 
   deleteProject(projectId: string) {
-    if (confirm('Are you sure?')) {
-      this.projectService.deleteProject(projectId);
+    if (confirm('Are you sure you want to delete this project?')) {
+      console.log('🗑️ Deleting project:', projectId);
+      this.projectService.deleteProject(projectId)
+        .then(() => {
+          console.log('✅ Project deleted');
+          this.loadAdminProjects();
+        })
+        .catch((error) => {
+          console.error('❌ Error deleting project:', error);
+          alert('Error deleting project: ' + error.message);
+        });
     }
   }
 
@@ -1333,34 +1905,77 @@ export class DashboardComponent implements OnInit {
 
   editProject(project: Project) {
     console.log('Edit project:', project);
+    alert('Edit functionality coming soon!');
   }
 
   editTask(task: Task) {
     console.log('Edit task:', task);
+    alert('Edit functionality coming soon!');
   }
 
-  selectConversation(conv: any) {
-    this.selectedConversation.set(conv);
-    this.chatService.getConversationMessages(this.currentUserId(), conv.employeeId)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((messages) => this.chatMessages.set(messages));
+  // Keep backward compatibility
+  selectConversation(conv: DashboardConversation, event?: Event) {
+    this.selectConversationUltimate(conv, event);
+  }
+
+  loadConversations(adminId: string) {
+    this.loadConversationsUltimate(adminId);
+  }
+
+  // Helper method to scroll chat to bottom
+  private scrollToBottom() {
+    setTimeout(() => {
+      const messagesContainer = document.querySelector('.messages-container');
+      if (messagesContainer) {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      }
+    }, 100);
   }
 
   async sendChatMessage() {
-    if (this.chatMessage.trim() && this.selectedConversation()) {
+    const user = this.authService.getCurrentUser();
+    if (!user) {
+      console.warn('Cannot send message: Admin not authenticated');
+      return;
+    }
+    
+    if (!this.chatMessage.trim() || !this.selectedConversation()) {
+      return;
+    }
+    
+    console.log('📤 Sending message:', this.chatMessage);
+    
+    try {
+      // Use ChatService to send message
       await this.chatService.sendMessage(
         this.currentUserId(),
         this.userName(),
         'admin',
-        this.selectedConversation().employeeId,
+        this.selectedConversation()!.employeeId,
         this.chatMessage
       );
+      
       this.chatMessage = '';
+      
+      // Reload messages after sending
+      setTimeout(() => {
+        if (this.selectedConversation()) {
+          this.loadMessagesUltimate(
+            this.currentUserId(), 
+            this.selectedConversation()!.employeeId
+          );
+        }
+      }, 500);
+      
+    } catch (error) {
+      console.error('❌ Error sending message:', error);
+      alert('Failed to send message. Please try again.');
     }
   }
 
   getEmployeeName(employeeId: string): string {
-    return this.employees().find((e) => e.id === employeeId)?.name || 'Unknown';
+    const employee = this.employees().find((e) => e.id === employeeId);
+    return employee?.name || employee?.email || 'Unknown Employee';
   }
 
   getTabTitle(): string {
@@ -1375,14 +1990,18 @@ export class DashboardComponent implements OnInit {
   }
 
   toggleCreateProjectForm() {
+    console.log('Toggle project form clicked');
+    console.log('Current user:', this.authService.getCurrentUser()?.email);
     this.showCreateProjectForm.update((v) => !v);
   }
 
   toggleCreateTaskForm() {
+    console.log('Toggle task form clicked');
     this.showCreateTaskForm.update((v) => !v);
   }
 
   logout() {
+    console.log('👋 Logging out');
     this.authService.logout();
     this.router.navigate(['/signin']);
   }

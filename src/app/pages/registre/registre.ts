@@ -25,7 +25,7 @@ export class Registre implements OnInit {
     // Check if user is already logged in
     const user = this.authService.getCurrentUser();
     if (user) {
-      this.router.navigate(['/dashboard']);
+      this.router.navigate(['/dashboard-admin']);
     }
     
     this.RegisterForm = this.fb.group({
