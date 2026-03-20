@@ -6,11 +6,6 @@ import {
   computed,
   DestroyRef
 } from '@angular/core';
-import { 
-  writeBatch, 
-   
-  serverTimestamp 
-} from '@angular/fire/firestore';
 import { NotificationService, Notification } from '../../services/notification.service';
 
 import { CommonModule } from '@angular/common';
@@ -43,7 +38,7 @@ import {
   Conversation,
   TaskComment
 } from '../../interfaces/models';
-import { Firestore, collection, collectionData, query, where, getDocs, addDoc, doc, setDoc, getDoc, Timestamp, orderBy, QueryDocumentSnapshot } from '@angular/fire/firestore';
+import { Firestore, collection, query, where, getDocs, addDoc, doc, setDoc, getDoc, Timestamp, orderBy, QueryDocumentSnapshot } from '@angular/fire/firestore';
 import { Observable, Subscriber, catchError, of, timeout, from } from 'rxjs';
 
 // Interface for dashboard conversations
@@ -173,10 +168,11 @@ interface ExtendedEmployeeDashboardStats {
                         @if (notification.type === 'task') { 📋 }
                         @if (notification.type === 'project') { 📁 }
                         @if (notification.type === 'chat') { 💬 }
+                        @if (notification.type === 'system') { ⚠️ }
                       </div>
                       <div class="notification-content">
                         <p>{{ notification.message }}</p>
-                        <small>{{ notification.timestamp | date: 'MMM dd, HH:mm' }}</small>
+                        <small>{{ getNotificationDate(notification.createdAt) | date: 'MMM dd, HH:mm' }}</small>
                       </div>
                       @if (!notification.read) {
                         <button class="btn-icon small" (click)="markAsRead(notification.id)">✓</button>
@@ -697,7 +693,7 @@ interface ExtendedEmployeeDashboardStats {
     .dashboard-container {
       display: flex;
       height: 100vh;
-      background-color: #f8f9fa;
+      background: linear-gradient(120deg, #d9fff3 0%, #e9fff7 42%, #f6fffb 100%);
       font-family: 'Inter', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     }
 
@@ -745,12 +741,12 @@ interface ExtendedEmployeeDashboardStats {
     /* Sidebar */
     .sidebar {
       width: 260px;
-      background: white;
-      border-right: 1px solid #e5e7eb;
+      background: linear-gradient(180deg, #047857 0%, #059669 100%);
+      border-right: 1px solid rgba(255, 255, 255, 0.2);
       display: flex;
       flex-direction: column;
       padding: 20px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      box-shadow: 0 12px 24px rgba(4, 120, 87, 0.28);
     }
 
     .sidebar-header {
@@ -760,7 +756,7 @@ interface ExtendedEmployeeDashboardStats {
     .logo {
       font-size: 22px;
       font-weight: 700;
-      color: #10b981;
+      color: #ffffff;
       margin: 0;
     }
 
@@ -776,18 +772,18 @@ interface ExtendedEmployeeDashboardStats {
       align-items: center;
       gap: 12px;
       padding: 12px 16px;
-      color: #6b7280;
+      color: #d4fff2;
       text-decoration: none;
       border-radius: 8px;
       cursor: pointer;
-      transition: all 0.3s;
-      font-weight: 500;
+      transition: all 0.2s;
+      font-weight: 600;
     }
 
     .nav-item:hover,
     .nav-item.active {
-      background: #f0f9ff;
-      color: #10b981;
+      background: rgba(255, 255, 255, 0.2);
+      color: #ffffff;
     }
 
     .nav-item:hover {
@@ -800,7 +796,7 @@ interface ExtendedEmployeeDashboardStats {
 
     .sidebar-footer {
       padding-top: 20px;
-      border-top: 1px solid #e5e7eb;
+      border-top: 1px solid rgba(255, 255, 255, 0.25);
     }
 
     .logout-btn {
@@ -827,6 +823,7 @@ interface ExtendedEmployeeDashboardStats {
       flex-direction: column;
       overflow: hidden;
       position: relative;
+      background: rgba(255, 255, 255, 0.6);
     }
 
     /* Top Bar */
@@ -835,16 +832,17 @@ interface ExtendedEmployeeDashboardStats {
       justify-content: space-between;
       align-items: center;
       padding: 20px 30px;
-      background: white;
-      border-bottom: 1px solid #e5e7eb;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      background: linear-gradient(120deg, #ffffff 0%, #ecfff7 100%);
+      border-bottom: 1px solid #e0e0e0;
+      box-shadow: 0 4px 12px rgba(34, 34, 59, 0.08);
       z-index: 10;
     }
 
     .top-bar h1 {
       margin: 0;
       color: #1f2937;
-      font-size: 24px;
+      font-size: 22px;
+      font-weight: 700;
     }
 
     .header-right {
@@ -944,7 +942,7 @@ interface ExtendedEmployeeDashboardStats {
     }
 
     .notification-item.unread {
-      background: #f0f9ff;
+      background: #eef1ff;
     }
 
     .notification-icon {
@@ -978,7 +976,8 @@ interface ExtendedEmployeeDashboardStats {
     .content {
       flex: 1;
       overflow-y: auto;
-      padding: 30px;
+      padding: 24px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(235, 255, 247, 0.8) 100%);
     }
 
     .section {
@@ -1012,16 +1011,17 @@ interface ExtendedEmployeeDashboardStats {
     }
 
     .stat-card {
-      background: white;
+      background: linear-gradient(170deg, #ffffff 0%, #ecfff9 100%);
       padding: 24px;
       border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      border: 1px solid #bdebdc;
+      box-shadow: 0 6px 16px rgba(5, 150, 105, 0.2);
       transition: all 0.3s;
     }
 
     .stat-card:hover {
       transform: translateY(-4px);
-      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 14px 24px rgba(5, 150, 105, 0.28);
     }
 
     .stat-header {
@@ -1897,6 +1897,7 @@ export class DashboardEmployeeComponent implements OnInit {
   private projectService = inject(ProjectService);
   private taskService = inject(TaskService);
   private chatService = inject(ChatService);
+  private notificationService = inject(NotificationService);
   private firestore = inject(Firestore);
   private auth = inject(Auth); // Add this line
   private router = inject(Router);
@@ -1916,7 +1917,7 @@ export class DashboardEmployeeComponent implements OnInit {
   admins = signal<User[]>([]);
   conversations = signal<DashboardConversation[]>([]);
   chatMessages = signal<DashboardMessage[]>([]);
-  notifications = signal<any[]>([]);
+  notifications = signal<Notification[]>([]);
 
   dashboardStats = signal<ExtendedEmployeeDashboardStats>({
     totalTasks: 0,
@@ -2047,34 +2048,28 @@ export class DashboardEmployeeComponent implements OnInit {
     return this.dashboardStats();
   }
 
-  checkUserRole() {
+  async checkUserRole() {
     const userId = this.currentUserId();
-    if (userId) {
-      const usersRef = collection(this.firestore, 'users');
-      const q = query(usersRef, where('uid', '==', userId));
+    if (!userId) {
+      return;
+    }
 
-      getDocs(q).then((snap) => {
-        if (snap.docs.length > 0) {
-          const user = snap.docs[0].data();
-          const role = user['role'] || '';
-          this.isEmployee.set(role === 'employee');
-          this.userRole.set(role);
-          console.log('🎯 User role:', role, 'Is employee:', this.isEmployee());
+    try {
+      const role = await this.authService.getUserRole(userId);
+      this.isEmployee.set(role === 'employee');
+      this.userRole.set(role);
+      console.log('🎯 User role:', role, 'Is employee:', this.isEmployee());
 
-          if (this.isEmployee()) {
-            this.loadEmployeeDashboard();
-            this.loadEmployeeInfo(userId);
-          } else {
-            console.warn('User is not employee, redirecting to admin dashboard');
-            this.router.navigate(['/dashboard/admin']);
-          }
-        } else {
-          console.warn('No user document found in Firestore');
-          this.router.navigate(['/signin']);
-        }
-      }).catch((error: any) => {
-        console.error('Error checking user role:', error);
-      });
+      if (this.isEmployee()) {
+        this.loadEmployeeDashboard();
+        this.loadEmployeeInfo(userId);
+      } else {
+        console.warn('User is not employee, redirecting to admin dashboard');
+        this.router.navigate(['/dashboard/admin']);
+      }
+    } catch (error: any) {
+      console.error('Error checking user role:', error);
+      this.router.navigate(['/signin']);
     }
   }
 
@@ -2306,34 +2301,23 @@ export class DashboardEmployeeComponent implements OnInit {
       });
   }
 
-  loadNotifications() {
-    console.log('🔔 Loading notifications...');
-    // Simulate notifications for now
-    const mockNotifications = [
-      {
-        id: '1',
-        type: 'task',
-        message: 'New task assigned: Complete project documentation',
-        timestamp: new Date(Date.now() - 3600000),
-        read: false
-      },
-      {
-        id: '2',
-        type: 'project',
-        message: 'Project "Website Redesign" updated',
-        timestamp: new Date(Date.now() - 7200000),
-        read: true
-      },
-      {
-        id: '3',
-        type: 'chat',
-        message: 'New message from Admin',
-        timestamp: new Date(Date.now() - 10800000),
-        read: false
-      }
-    ];
-    
-    this.notifications.set(mockNotifications);
+  async loadNotifications() {
+    const userId = this.currentUserId();
+    if (!userId) return;
+
+    try {
+      this.notificationService
+        .getNotifications(userId)
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (notifications) => this.notifications.set(notifications),
+          error: (error: any) => {
+            console.error('❌ Error loading notifications:', { uid: userId, error });
+          }
+        });
+    } catch (error: any) {
+      console.error('❌ Failed to initialize employee notifications stream:', { uid: userId, error });
+    }
   }
 
   loadConversations(employeeId: string) {
@@ -2529,21 +2513,37 @@ export class DashboardEmployeeComponent implements OnInit {
     return conv?.unreadCount || 0;
   }
 
+  getNotificationDate(value: any): Date {
+    if (value?.toDate) {
+      return value.toDate();
+    }
+    return value instanceof Date ? value : new Date(value);
+  }
+
   // UI Interaction Methods
   toggleNotifications() {
     this.showNotifications.update(v => !v);
   }
 
-  markAsRead(notificationId: string) {
-    this.notifications.update(notifications =>
-      notifications.map(n => 
-        n.id === notificationId ? { ...n, read: true } : n
-      )
-    );
+  async markAsRead(notificationId: string) {
+    try {
+      await this.notificationService.markAsRead(notificationId);
+    } catch (error: any) {
+      console.error('❌ Error marking notification as read:', error);
+    }
   }
 
-  clearAllNotifications() {
-    this.notifications.set([]);
+  async clearAllNotifications() {
+    const userId = this.currentUserId();
+    if (!userId) {
+      return;
+    }
+
+    try {
+      await this.notificationService.markAllAsRead(userId);
+    } catch (error: any) {
+      console.error('❌ Error clearing notifications:', error);
+    }
   }
 
   viewAllTasks() {

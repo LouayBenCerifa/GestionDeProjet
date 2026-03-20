@@ -1,28 +1,29 @@
 import { Injectable, inject } from '@angular/core';
 import {
-  Firestore,
   collection,
-  collectionData,
   addDoc,
   updateDoc,
   deleteDoc,
   doc,
+  Firestore,
   Timestamp,
   query,
   where,
   getDocs,
   getDoc,
+  onSnapshot,
   orderBy,
 } from '@angular/fire/firestore';
 import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
 import { Task, TaskComment, EmployeeDashboardStats } from '../interfaces/models';
+import { NotificationService } from './notification.service';
 
 @Injectable({
   providedIn: 'root',
 })
 export class TaskService {
   private firestore = inject(Firestore);
+  private notificationService = inject(NotificationService);
 
   /**
    * Create a new task (Admin only)
@@ -48,8 +49,10 @@ export class TaskService {
 
     const docRef = await addDoc(tasksRef, newTask);
 
-    // Create notification for employee
-    await this.createTaskNotification(employeeId, taskData.title, docRef.id);
+    const recipientIds = await this.expandNotificationRecipients(employeeId);
+    for (const recipientId of recipientIds) {
+      await this.notificationService.notifyTaskAssigned(recipientId, adminId, docRef.id, taskData.title);
+    }
 
     return docRef.id;
   }
@@ -61,16 +64,27 @@ export class TaskService {
     const tasksRef = collection(this.firestore, 'tasks');
     const q = query(tasksRef, where('projectId', '==', projectId), orderBy('deadline', 'asc'));
 
-    return collectionData(q, { idField: 'id' }).pipe(
-      map((tasks: any[]) =>
-        tasks.map((t) => ({
-          ...t,
-          deadline: t.deadline?.toDate ? t.deadline.toDate() : t.deadline,
-          createdAt: t.createdAt?.toDate ? t.createdAt.toDate() : t.createdAt,
-          updatedAt: t.updatedAt?.toDate ? t.updatedAt.toDate() : t.updatedAt,
-        }))
-      )
-    ) as Observable<Task[]>;
+    return new Observable<Task[]>((subscriber) => {
+      const unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+          const tasks = snapshot.docs.map((snapshotDoc) => {
+            const t = snapshotDoc.data() as any;
+            return {
+              id: snapshotDoc.id,
+              ...t,
+              deadline: t.deadline?.toDate ? t.deadline.toDate() : t.deadline,
+              createdAt: t.createdAt?.toDate ? t.createdAt.toDate() : t.createdAt,
+              updatedAt: t.updatedAt?.toDate ? t.updatedAt.toDate() : t.updatedAt,
+            } as Task;
+          });
+          subscriber.next(tasks);
+        },
+        (error) => subscriber.error(error)
+      );
+
+      return () => unsubscribe();
+    });
   }
 
   /**
@@ -80,54 +94,63 @@ export class TaskService {
   const tasksRef = collection(this.firestore, 'tasks');
   const q = query(tasksRef, where('assignedTo', '==', employeeId), orderBy('deadline', 'asc'));
 
-  return collectionData(q, { idField: 'id' }).pipe(
-    map((tasks: any[]) =>
-      tasks.map((t) => {
-        // Safely handle Firestore Timestamps
-        const deadline = t.deadline;
-        const createdAt = t.createdAt;
-        const updatedAt = t.updatedAt;
-        
-        return {
-          ...t,
-          deadline: deadline?.toDate ? deadline.toDate() : 
-                   (deadline instanceof Date ? deadline : new Date(deadline)),
-          createdAt: createdAt?.toDate ? createdAt.toDate() : 
-                    (createdAt instanceof Date ? createdAt : new Date(createdAt)),
-          updatedAt: updatedAt?.toDate ? updatedAt.toDate() : 
-                    (updatedAt instanceof Date ? updatedAt : new Date(updatedAt)),
-        } as Task;
-      })
-    )
-  );
+  return new Observable<Task[]>((subscriber) => {
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const tasks = snapshot.docs.map((snapshotDoc) => {
+          const t = snapshotDoc.data() as any;
+          const deadline = t.deadline;
+          const createdAt = t.createdAt;
+          const updatedAt = t.updatedAt;
+
+          return {
+            id: snapshotDoc.id,
+            ...t,
+            deadline: deadline?.toDate ? deadline.toDate() : (deadline instanceof Date ? deadline : new Date(deadline)),
+            createdAt: createdAt?.toDate ? createdAt.toDate() : (createdAt instanceof Date ? createdAt : new Date(createdAt)),
+            updatedAt: updatedAt?.toDate ? updatedAt.toDate() : (updatedAt instanceof Date ? updatedAt : new Date(updatedAt)),
+          } as Task;
+        });
+
+        subscriber.next(tasks);
+      },
+      (error) => subscriber.error(error)
+    );
+
+    return () => unsubscribe();
+  });
   }
 
   /**
    * Get single task by ID
    */
   getTask(taskId: string): Observable<Task | null> {
-    const taskRef = doc(this.firestore, 'tasks', taskId);
+    return new Observable<Task | null>((subscriber) => {
+      const taskRef = doc(this.firestore, 'tasks', taskId);
 
-    return collectionData(query(collection(this.firestore, 'tasks'), where('__name__', '==', taskId)), {
-      idField: 'id',
-    }).pipe(
-      map((tasks: any[]) =>
-        tasks.length > 0
-          ? {
-              ...tasks[0],
-              deadline: tasks[0].deadline?.toDate
-                ? tasks[0].deadline.toDate()
-                : tasks[0].deadline,
-              createdAt: tasks[0].createdAt?.toDate
-                ? tasks[0].createdAt.toDate()
-                : tasks[0].createdAt,
-              updatedAt: tasks[0].updatedAt?.toDate
-                ? tasks[0].updatedAt.toDate()
-                : tasks[0].updatedAt,
-            }
-          : null
-      )
-    ) as Observable<Task | null>;
+      const unsubscribe = onSnapshot(
+        taskRef,
+        (snapshot) => {
+          if (!snapshot.exists()) {
+            subscriber.next(null);
+            return;
+          }
+
+          const taskData = snapshot.data() as any;
+          subscriber.next({
+            id: snapshot.id,
+            ...taskData,
+            deadline: taskData.deadline?.toDate ? taskData.deadline.toDate() : taskData.deadline,
+            createdAt: taskData.createdAt?.toDate ? taskData.createdAt.toDate() : taskData.createdAt,
+            updatedAt: taskData.updatedAt?.toDate ? taskData.updatedAt.toDate() : taskData.updatedAt,
+          } as Task);
+        },
+        (error) => subscriber.error(error)
+      );
+
+      return () => unsubscribe();
+    });
   }
 
   /**
@@ -135,6 +158,12 @@ export class TaskService {
    */
   async updateTask(taskId: string, updates: Partial<Task>): Promise<void> {
     const taskRef = doc(this.firestore, 'tasks', taskId);
+    const existingTaskSnapshot = await getDoc(taskRef);
+    const existingTaskData = existingTaskSnapshot.exists() ? existingTaskSnapshot.data() : null;
+    const previousStatus = existingTaskData?.['status'] as string | undefined;
+    const assignedBy = existingTaskData?.['assignedBy'] as string | undefined;
+    const assignedTo = existingTaskData?.['assignedTo'] as string | undefined;
+    const taskTitle = (updates.title || existingTaskData?.['title'] || 'Task') as string;
 
     const updateData: any = {
       ...updates,
@@ -146,6 +175,13 @@ export class TaskService {
     }
 
     await updateDoc(taskRef, updateData);
+
+    const nextStatus = (updates.status || previousStatus) as string | undefined;
+    const becameDone = previousStatus !== 'done' && nextStatus === 'done';
+
+    if (becameDone && assignedBy && assignedTo) {
+      await this.notificationService.notifyTaskCompleted(assignedBy, assignedTo, taskId, taskTitle);
+    }
   }
 
   /**
@@ -249,23 +285,61 @@ export class TaskService {
     };
   }
 
-  /**
-   * Private helper: Create task notification
-   */
-  private async createTaskNotification(
-    employeeId: string,
-    taskTitle: string,
-    taskId: string
-  ): Promise<void> {
-    const notificationsRef = collection(this.firestore, 'notifications');
-    await addDoc(notificationsRef, {
-      userId: employeeId,
-      type: 'task-assigned',
-      title: 'New Task Assigned',
-      message: `You have been assigned: ${taskTitle}`,
-      link: `/employee/tasks/${taskId}`,
-      isRead: false,
-      createdAt: Timestamp.now(),
-    });
+  async checkAndNotifyOverdueTasksForAdmin(adminId: string): Promise<void> {
+    const tasksRef = collection(this.firestore, 'tasks');
+    const tasksQuery = query(tasksRef, where('assignedBy', '==', adminId));
+    const tasksSnapshot = await getDocs(tasksQuery);
+
+    const now = new Date();
+
+    for (const taskDoc of tasksSnapshot.docs) {
+      const task = taskDoc.data();
+      const status = task['status'];
+      const deadlineDate = task['deadline']?.toDate ? task['deadline'].toDate() : new Date(task['deadline']);
+
+      if (status !== 'done' && deadlineDate < now) {
+        const deadlineISODate = deadlineDate.toISOString().slice(0, 10);
+        await this.notificationService.notifyTaskOverdue(
+          adminId,
+          task['assignedTo'] || '',
+          taskDoc.id,
+          task['title'] || 'Task',
+          deadlineISODate
+        );
+      }
+    }
+  }
+
+  private async expandNotificationRecipients(userId: string): Promise<string[]> {
+    const recipients = new Set<string>();
+    if (!userId) return [];
+
+    recipients.add(userId);
+
+    try {
+      const userDocRef = doc(this.firestore, 'users', userId);
+      const userDoc = await getDoc(userDocRef);
+
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        if (typeof data['uid'] === 'string' && data['uid'].trim().length > 0) {
+          recipients.add(data['uid']);
+        }
+      }
+
+      const reverseQuery = query(collection(this.firestore, 'users'), where('uid', '==', userId));
+      const reverseSnapshot = await getDocs(reverseQuery);
+      reverseSnapshot.docs.forEach(snapshot => {
+        recipients.add(snapshot.id);
+        const data = snapshot.data();
+        if (typeof data['uid'] === 'string' && data['uid'].trim().length > 0) {
+          recipients.add(data['uid']);
+        }
+      });
+    } catch (error) {
+      console.warn('Could not expand notification recipients for user:', userId, error);
+    }
+
+    return Array.from(recipients);
   }
 }

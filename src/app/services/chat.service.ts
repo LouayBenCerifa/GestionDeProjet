@@ -1,12 +1,11 @@
 import { Injectable, inject } from '@angular/core';
 import {
-  Firestore,
   collection,
-  collectionData,
   addDoc,
   query,
   where,
   orderBy,
+  Firestore,
   Timestamp,
   updateDoc,
   doc,
@@ -14,16 +13,18 @@ import {
   getDoc,
   setDoc,
   deleteDoc,
+  onSnapshot,
 } from '@angular/fire/firestore';
 import { Observable, BehaviorSubject } from 'rxjs';
-import { map } from 'rxjs/operators';
 import { ChatMessage, Conversation } from '../interfaces/models';
+import { NotificationService } from './notification.service';
 
 @Injectable({
   providedIn: 'root',
 })
 export class ChatService {
   private firestore = inject(Firestore);
+  private notificationService = inject(NotificationService);
 
   /**
    * Send a message from admin to employee
@@ -57,7 +58,24 @@ export class ChatService {
       });
 
       // Update conversation
-      await this.updateConversation(conversationId, senderId, senderName, content);
+      await this.updateConversation(
+        conversationId,
+        senderId,
+        senderName,
+        senderRole,
+        recipientId,
+        content
+      );
+
+      const recipientIds = await this.expandNotificationRecipients(recipientId);
+      for (const resolvedRecipientId of recipientIds) {
+        await this.notificationService.notifyChatMessage(
+          resolvedRecipientId,
+          senderId,
+          senderName,
+          conversationId
+        );
+      }
 
       return docRef.id;
     } catch (error) {
@@ -79,14 +97,25 @@ export class ChatService {
       orderBy('timestamp', 'asc')
     );
 
-    return collectionData(messagesQuery, { idField: 'id' }).pipe(
-      map((messages: any[]) =>
-        messages.map((msg) => ({
-          ...msg,
-          timestamp: msg.timestamp?.toDate ? msg.timestamp.toDate() : msg.timestamp,
-        }))
-      )
-    ) as Observable<ChatMessage[]>;
+    return new Observable<ChatMessage[]>((subscriber) => {
+      const unsubscribe = onSnapshot(
+        messagesQuery,
+        (snapshot) => {
+          const messages = snapshot.docs.map((snapshotDoc) => {
+            const msg = snapshotDoc.data() as any;
+            return {
+              id: snapshotDoc.id,
+              ...msg,
+              timestamp: msg.timestamp?.toDate ? msg.timestamp.toDate() : msg.timestamp,
+            } as ChatMessage;
+          });
+          subscriber.next(messages);
+        },
+        (error) => subscriber.error(error)
+      );
+
+      return () => unsubscribe();
+    });
   }
 
   /**
@@ -102,16 +131,25 @@ export class ChatService {
       orderBy('lastMessageTime', 'desc')
     );
 
-    return collectionData(conversationsQuery, { idField: 'id' }).pipe(
-      map((conversations: any[]) =>
-        conversations.map((conv) => ({
-          ...conv,
-          lastMessageTime: conv.lastMessageTime?.toDate
-            ? conv.lastMessageTime.toDate()
-            : conv.lastMessageTime,
-        }))
-      )
-    ) as Observable<Conversation[]>;
+    return new Observable<Conversation[]>((subscriber) => {
+      const unsubscribe = onSnapshot(
+        conversationsQuery,
+        (snapshot) => {
+          const conversations = snapshot.docs.map((snapshotDoc) => {
+            const conv = snapshotDoc.data() as any;
+            return {
+              id: snapshotDoc.id,
+              ...conv,
+              lastMessageTime: conv.lastMessageTime?.toDate ? conv.lastMessageTime.toDate() : conv.lastMessageTime,
+            } as Conversation;
+          });
+          subscriber.next(conversations);
+        },
+        (error) => subscriber.error(error)
+      );
+
+      return () => unsubscribe();
+    });
   }
 
   /**
@@ -133,7 +171,15 @@ export class ChatService {
       where('isRead', '==', false)
     );
 
-    return collectionData(unreadQuery).pipe(map((messages) => messages.length));
+    return new Observable<number>((subscriber) => {
+      const unsubscribe = onSnapshot(
+        unreadQuery,
+        (snapshot) => subscriber.next(snapshot.size),
+        (error) => subscriber.error(error)
+      );
+
+      return () => unsubscribe();
+    });
   }
 
   /**
@@ -162,6 +208,8 @@ export class ChatService {
     conversationId: string,
     senderId: string,
     senderName: string,
+    senderRole: 'admin' | 'employee',
+    recipientId: string,
     lastMessage: string
   ): Promise<void> {
     const conversationRef = doc(this.firestore, 'conversations', conversationId);
@@ -176,7 +224,49 @@ export class ChatService {
         lastMessageTime: Timestamp.now(),
       });
     } else {
-      // Create new conversation (will be handled by admin/employee service)
+      const isAdminSender = senderRole === 'admin';
+
+      await setDoc(conversationRef, {
+        adminId: isAdminSender ? senderId : recipientId,
+        employeeId: isAdminSender ? recipientId : senderId,
+        adminName: isAdminSender ? senderName : 'Admin',
+        employeeName: isAdminSender ? 'Employee' : senderName,
+        lastMessage,
+        lastMessageTime: Timestamp.now(),
+        unreadCount: 1,
+      });
     }
+  }
+
+  private async expandNotificationRecipients(userId: string): Promise<string[]> {
+    const recipients = new Set<string>();
+    if (!userId) return [];
+
+    recipients.add(userId);
+
+    try {
+      const userDocRef = doc(this.firestore, 'users', userId);
+      const userDoc = await getDoc(userDocRef);
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        if (typeof data['uid'] === 'string' && data['uid'].trim().length > 0) {
+          recipients.add(data['uid']);
+        }
+      }
+
+      const reverseQuery = query(collection(this.firestore, 'users'), where('uid', '==', userId));
+      const reverseSnapshot = await getDocs(reverseQuery);
+      reverseSnapshot.docs.forEach(snapshot => {
+        recipients.add(snapshot.id);
+        const data = snapshot.data();
+        if (typeof data['uid'] === 'string' && data['uid'].trim().length > 0) {
+          recipients.add(data['uid']);
+        }
+      });
+    } catch (error) {
+      console.warn('Could not expand chat notification recipient:', userId, error);
+    }
+
+    return Array.from(recipients);
   }
 }
