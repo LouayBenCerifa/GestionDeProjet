@@ -8,6 +8,6 @@
       <p [class.completed-text]="task.completed">{{ task.description }}</p>
       <span class="task-date">{{ task.createdAt | date:'mediumDate' }}</span>
     </div>
-    <button class="delete-btn" (click)="deleteTask.emit(task.id)">🗑️</button>
+    <button class="delete-btn" (click)="deleteTask.emit(task.id)"><span class="material-symbols-rounded">delete</span></button>
   </div>
 </div>

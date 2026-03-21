@@ -2,15 +2,32 @@
   position: relative;
   display: flex;
   align-items: center;
-  font-size: 24px;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  font-size: 18px;
+  border-radius: 999px;
+  background: #eef2ff;
+  border: 1px solid #dbe4ff;
 }
+
+.icon {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
 .badge {
-  background: var(--color-error);
+  background: #ef4444;
   color: #fff;
   border-radius: 50%;
-  padding: 2px 8px;
-  font-size: 12px;
+  min-width: 18px;
+  min-height: 18px;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
   position: absolute;
-  top: -8px;
-  right: -8px;
+  top: -5px;
+  right: -5px;
 }

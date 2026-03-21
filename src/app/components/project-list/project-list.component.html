@@ -12,8 +12,8 @@
       <p class="progress-text">{{ project.completionPercentage.toFixed(0) }}% Complete</p>
     </div>
     <div class="project-info">
-      <span>📅 {{ project.startDate | date: 'MMM dd' }} - {{ project.endDate | date: 'MMM dd, yyyy' }}</span>
-      <span>👥 {{ project.teamMembers.length || 0 }} members</span>
+      <span>Date: {{ project.startDate | date: 'MMM dd' }} - {{ project.endDate | date: 'MMM dd, yyyy' }}</span>
+      <span>Team: {{ project.teamMembers.length || 0 }} members</span>
     </div>
   </div>
 </div>

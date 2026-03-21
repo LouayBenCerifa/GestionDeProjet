@@ -36,10 +36,12 @@ import {
   User,
   EmployeeDashboardStats,
   Conversation,
-  TaskComment
+  TaskComment,
+  TaskActivityEntry
 } from '../../interfaces/models';
 import { Firestore, collection, query, where, getDocs, addDoc, doc, setDoc, getDoc, Timestamp, orderBy, QueryDocumentSnapshot } from '@angular/fire/firestore';
 import { Observable, Subscriber, catchError, of, timeout, from } from 'rxjs';
+import Swal from 'sweetalert2';
 
 // Interface for dashboard conversations
 interface DashboardConversation {
@@ -84,7 +86,7 @@ interface ExtendedEmployeeDashboardStats {
       <!-- Access Denied State -->
       @if (!isEmployee()) {
         <div class="access-denied">
-          <div class="denied-icon">🚫</div>
+          <div class="denied-icon"><span class="material-symbols-rounded app-icon">block</span></div>
           <h1>Access Denied</h1>
           <p>This dashboard is restricted to employees only.</p>
           <p class="user-role-info">Your role: <strong>{{ userRole() }}</strong></p>
@@ -94,37 +96,37 @@ interface ExtendedEmployeeDashboardStats {
         <!-- Sidebar -->
         <aside class="sidebar">
           <div class="sidebar-header">
-            <h2 class="logo">👨‍💼 GestionPro</h2>
+            <h2 class="logo"><span class="material-symbols-rounded app-icon">bolt</span> GestionPro</h2>
           </div>
           <nav class="sidebar-nav">
             <a class="nav-item" 
                [class.active]="activeTab() === 'dashboard'" 
                (click)="onTabChange('dashboard', $event)">
-              <span class="icon">📈</span> Dashboard
+              <span class="icon material-symbols-rounded app-icon">dashboard</span> Dashboard
             </a>
             
             <a class="nav-item" 
                [class.active]="activeTab() === 'tasks'" 
                (click)="onTabChange('tasks', $event)">
-              <span class="icon">✓</span> My Tasks
+              <span class="icon material-symbols-rounded app-icon">task_alt</span> My Tasks
             </a>
             
             <a class="nav-item" 
                [class.active]="activeTab() === 'projects'" 
                (click)="onTabChange('projects', $event)">
-              <span class="icon">📁</span> My Projects
+              <span class="icon material-symbols-rounded app-icon">folder</span> My Projects
             </a>
             
             <a class="nav-item" 
                [class.active]="activeTab() === 'chat'" 
                (click)="onTabChange('chat', $event)">
-              <span class="icon">💬</span> Chat with Admin
+              <span class="icon material-symbols-rounded app-icon">chat</span> Chat with Admin
             </a>
             
             <a class="nav-item" 
                [class.active]="activeTab() === 'profile'" 
                (click)="onTabChange('profile', $event)">
-              <span class="icon">👤</span> Profile
+              <span class="icon material-symbols-rounded app-icon">person</span> Profile
             </a>
           </nav>
           <div class="sidebar-footer">
@@ -138,7 +140,7 @@ interface ExtendedEmployeeDashboardStats {
           <header class="top-bar">
             <h1>{{ getTabTitle() }}</h1>
             <div class="header-right">
-              <div class="notifications" (click)="toggleNotifications()">🔔
+              <div class="notifications" (click)="toggleNotifications()"><span class="material-symbols-rounded app-icon">notifications</span>
                 @if (unreadNotifications() > 0) {
                   <span class="notification-badge">{{ unreadNotifications() }}</span>
                 }
@@ -158,17 +160,17 @@ interface ExtendedEmployeeDashboardStats {
             <div class="notifications-panel">
               <div class="notifications-header">
                 <h3>Notifications</h3>
-                <button class="btn-icon" (click)="clearAllNotifications()">🗑️</button>
+                <button class="btn-icon" (click)="clearAllNotifications()"><span class="material-symbols-rounded app-icon">cleaning_services</span></button>
               </div>
               <div class="notifications-list">
                 @if (notifications().length > 0) {
                   @for (notification of notifications(); track notification.id) {
                     <div class="notification-item" [class.unread]="!notification.read">
                       <div class="notification-icon">
-                        @if (notification.type === 'task') { 📋 }
-                        @if (notification.type === 'project') { 📁 }
-                        @if (notification.type === 'chat') { 💬 }
-                        @if (notification.type === 'system') { ⚠️ }
+                        @if (notification.type === 'task') { <span class="material-symbols-rounded app-icon">task_alt</span> }
+                        @if (notification.type === 'project') { <span class="material-symbols-rounded app-icon">folder</span> }
+                        @if (notification.type === 'chat') { <span class="material-symbols-rounded app-icon">chat</span> }
+                        @if (notification.type === 'system') { <span class="material-symbols-rounded app-icon">warning</span> }
                       </div>
                       <div class="notification-content">
                         <p>{{ notification.message }}</p>
@@ -195,7 +197,7 @@ interface ExtendedEmployeeDashboardStats {
               <div class="stats-grid">
                 <div class="stat-card">
                   <div class="stat-header">
-                    <span class="stat-icon">📊</span>
+                    <span class="stat-icon material-symbols-rounded app-icon">task_alt</span>
                     <h3>My Tasks</h3>
                   </div>
                   <p class="stat-value">{{ getDashboardStats().totalTasks }}</p>
@@ -204,7 +206,7 @@ interface ExtendedEmployeeDashboardStats {
 
                 <div class="stat-card">
                   <div class="stat-header">
-                    <span class="stat-icon">✅</span>
+                    <span class="stat-icon material-symbols-rounded app-icon">trending_up</span>
                     <h3>Completion Rate</h3>
                   </div>
                   <p class="stat-value">{{ getDashboardStats().taskCompletionRate.toFixed(1) }}%</p>
@@ -213,7 +215,7 @@ interface ExtendedEmployeeDashboardStats {
 
                 <div class="stat-card">
                   <div class="stat-header">
-                    <span class="stat-icon">📁</span>
+                    <span class="stat-icon material-symbols-rounded app-icon">folder</span>
                     <h3>Active Projects</h3>
                   </div>
                   <p class="stat-value">{{ getDashboardStats().activeProjects }}</p>
@@ -222,7 +224,7 @@ interface ExtendedEmployeeDashboardStats {
 
                 <div class="stat-card">
                   <div class="stat-header">
-                    <span class="stat-icon">⏳</span>
+                    <span class="stat-icon material-symbols-rounded app-icon">schedule</span>
                     <h3>Overdue Tasks</h3>
                   </div>
                   <p class="stat-value">{{ getDashboardStats().overdueTasks }}</p>
@@ -240,8 +242,14 @@ interface ExtendedEmployeeDashboardStats {
                   @if (recentTasks().length > 0) {
                     @for (task of recentTasks(); track task.id) {
                       <div class="task-card" [class.overdue]="isTaskOverdue(task)">
-                        <div class="task-header">
-                          <h3>{{ task.title }}</h3>
+                        <div class="task-headline">
+                          <div class="task-title-wrap">
+                            <span class="material-symbols-rounded app-icon">assignment</span>
+                            <div>
+                              <h3>{{ task.title }}</h3>
+                              <p class="task-subtitle">Project: {{ getProjectName(task.projectId) }}</p>
+                            </div>
+                          </div>
                           <div class="task-status-badges">
                             <span class="priority-badge" [class]="'priority-' + task.priority">{{ task.priority | uppercase }}</span>
                             <span class="status-badge" [class]="'status-' + task.status">{{ task.status | titlecase }}</span>
@@ -249,17 +257,22 @@ interface ExtendedEmployeeDashboardStats {
                         </div>
                         <p class="task-description">{{ task.description }}</p>
                         <div class="task-meta">
-                          <span>📁 Project: {{ getProjectName(task.projectId) }}</span>
-                          <span>📅 Deadline: {{ task.deadline | date: 'MMM dd, yyyy' }}</span>
+                          <span class="meta-chip">
+                            <span class="material-symbols-rounded">event</span>
+                            Deadline: {{ task.deadline | date: 'MMM dd, yyyy' }}
+                          </span>
                           @if (isTaskOverdue(task)) {
-                            <span class="overdue-label">⚠️ OVERDUE</span>
+                            <span class="meta-chip overdue-label">
+                              <span class="material-symbols-rounded">warning</span>
+                              OVERDUE
+                            </span>
                           }
                         </div>
                         <div class="progress-section">
-                          <div class="progress-bar-container">
-                            <div class="progress-bar" [style.width.%]="task.completionPercentage"></div>
+                          <div class="progress-track">
+                            <div class="progress-fill" [style.width.%]="task.completionPercentage"></div>
                           </div>
-                          <span>{{ task.completionPercentage }}% complete</span>
+                          <p class="progress-subtitle">{{ task.completionPercentage }}% complete</p>
                         </div>
                         <div class="task-actions">
                           <button class="btn-small" (click)="updateTaskProgress(task)">Update Progress</button>
@@ -285,8 +298,11 @@ interface ExtendedEmployeeDashboardStats {
                   @if (myProjects().length > 0) {
                     @for (project of myProjects(); track project.id) {
                       <div class="project-card">
-                        <div class="project-header">
-                          <h3>{{ project.name || 'Unnamed Project' }}</h3>
+                        <div class="project-headline">
+                          <div class="project-title-wrap">
+                            <span class="material-symbols-rounded app-icon">folder</span>
+                            <h3>{{ project.name || 'Unnamed Project' }}</h3>
+                          </div>
                           <span class="badge" 
                                 [class.status-planning]="project.status === 'planning'" 
                                 [class.status-in-progress]="project.status === 'in-progress'"
@@ -297,19 +313,19 @@ interface ExtendedEmployeeDashboardStats {
                         </div>
                         <p class="project-description">{{ project.description || 'No description' }}</p>
                         <div class="project-meta">
-                          <span>👤 Admin: {{ getAdminName(project.adminId) }}</span>
-                          <span>👥 Team: {{ (project.teamMembers || []).length }} members</span>
-                          <span>📋 Tasks: {{ getProjectTaskCount(project.id) }}</span>
+                          <span class="meta-chip"><span class="material-symbols-rounded">manage_accounts</span>Admin: {{ getAdminName(project.adminId) }}</span>
+                          <span class="meta-chip"><span class="material-symbols-rounded">groups</span>Team: {{ (project.teamMembers || []).length }} members</span>
+                          <span class="meta-chip"><span class="material-symbols-rounded">task_alt</span>Tasks: {{ getProjectTaskCount(project.id) }}</span>
                         </div>
                         <div class="progress-section">
-                          <div class="progress-bar-container">
-                            <div class="progress-bar" [style.width.%]="project.completionPercentage || 0"></div>
+                          <div class="progress-track">
+                            <div class="progress-fill" [style.width.%]="project.completionPercentage || 0"></div>
                           </div>
-                          <span>{{ (project.completionPercentage || 0).toFixed(0) }}% complete</span>
+                          <p class="progress-subtitle">{{ (project.completionPercentage || 0).toFixed(0) }}% complete</p>
                         </div>
                         <div class="project-dates">
-                          <small>Start: {{ project.startDate | date: 'MMM dd, yyyy' }}</small>
-                          <small>End: {{ project.endDate | date: 'MMM dd, yyyy' }}</small>
+                          <small class="meta-chip"><span class="material-symbols-rounded">event_available</span>Start: {{ project.startDate | date: 'MMM dd, yyyy' }}</small>
+                          <small class="meta-chip"><span class="material-symbols-rounded">event_busy</span>End: {{ project.endDate | date: 'MMM dd, yyyy' }}</small>
                         </div>
                         <div class="project-actions">
                           <button class="btn-small" (click)="viewProjectDetails(project)">View Details</button>
@@ -333,6 +349,11 @@ interface ExtendedEmployeeDashboardStats {
               <div class="section-header">
                 <h2>My Tasks</h2>
                 <div class="filter-controls">
+                  @if (selectedTaskProjectId) {
+                    <button class="btn btn-secondary" (click)="clearProjectTaskScope()">
+                      Project: {{ getProjectName(selectedTaskProjectId) }} ✕
+                    </button>
+                  }
                   <select class="input" [(ngModel)]="taskFilter" (change)="filterTasks()">
                     <option value="all">All Tasks</option>
                     <option value="todo">To Do</option>
@@ -340,12 +361,14 @@ interface ExtendedEmployeeDashboardStats {
                     <option value="done">Done</option>
                     <option value="overdue">Overdue</option>
                     <option value="high">High Priority</option>
+                    <option value="due-this-week">Due This Week</option>
                   </select>
                   <select class="input" [(ngModel)]="taskSort" (change)="sortTasks()">
                     <option value="deadline">Sort by Deadline</option>
                     <option value="priority">Sort by Priority</option>
                     <option value="status">Sort by Status</option>
                     <option value="project">Sort by Project</option>
+                    <option value="score">Sort by Score</option>
                   </select>
                 </div>
               </div>
@@ -363,11 +386,13 @@ interface ExtendedEmployeeDashboardStats {
                       </div>
                       <p class="task-description">{{ task.description }}</p>
                       <div class="task-meta">
-                        <span>📁 Project: {{ getProjectName(task.projectId) }}</span>
-                        <span>👤 Assigned by: {{ getAdminName(task.assignedBy) }}</span>
-                        <span>📅 Deadline: {{ task.deadline | date: 'MMM dd, yyyy' }}</span>
+                          <span>Project: {{ getProjectName(task.projectId) }}</span>
+                          <span>Assigned by: {{ getAdminName(task.assignedBy) }}</span>
+                          <span>Deadline: {{ task.deadline | date: 'MMM dd, yyyy' }}</span>
+                        <span>Score: {{ getTaskScore(task).toFixed(2) }}</span>
+                        <span>Hours: {{ task.actualHours || 0 }}/{{ task.estimatedHours || 0 }}</span>
                         @if (isTaskOverdue(task)) {
-                          <span class="overdue-label">⚠️ OVERDUE</span>
+                          <span class="overdue-label">OVERDUE</span>
                         }
                       </div>
                       <div class="progress-section">
@@ -401,6 +426,9 @@ interface ExtendedEmployeeDashboardStats {
                       <div class="task-actions">
                         <button class="btn-small" (click)="viewTaskDetails(task)">View Details</button>
                         <button class="btn-small" (click)="chatAboutTask(task)">Chat about Task</button>
+                        <button class="btn-small" (click)="openTaskActivity(task.id)">Activity</button>
+                        <button class="btn-small" (click)="setTaskRemindersPrompt(task)">Reminders</button>
+                        <button class="btn-small" (click)="logOneHour(task.id)">+1h</button>
                       </div>
                     </div>
                   }
@@ -410,6 +438,26 @@ interface ExtendedEmployeeDashboardStats {
                   </div>
                 }
               </div>
+
+              @if (selectedActivityTaskId()) {
+                <div class="form-card activity-card">
+                  <h3>Task Activity ({{ selectedActivityTaskId() }})</h3>
+                  @if (taskActivities().length > 0) {
+                    <div class="notifications-list">
+                      @for (entry of taskActivities(); track entry.id) {
+                        <div class="notification-item">
+                          <div class="notification-content">
+                            <p><strong>{{ entry.action }}</strong> by {{ entry.actorName }} ({{ entry.actorRole }})</p>
+                            <small>{{ entry.createdAt | date: 'MMM dd, yyyy HH:mm' }}</small>
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  } @else {
+                    <p>No activity yet for this task.</p>
+                  }
+                </div>
+              }
             </section>
           }
 
@@ -541,6 +589,7 @@ interface ExtendedEmployeeDashboardStats {
                           <div class="conv-info">
                             <h4>{{ conv.adminName }}</h4>
                             <p class="conv-preview">{{ conv.lastMessage }}</p>
+                            <small class="conv-time">{{ conv.lastMessageTime | date: 'MMM dd, HH:mm' }}</small>
                           </div>
                           @if (conv.unreadCount > 0) {
                             <span class="unread-badge">{{ conv.unreadCount }}</span>
@@ -558,8 +607,11 @@ interface ExtendedEmployeeDashboardStats {
                 <div class="chat-main">
                   @if (selectedConversation() || selectedAdmin()) {
                     <div class="chat-header">
-                      <h3>Chat with {{ selectedAdmin()?.name || selectedConversation()?.adminName || 'Administrator' }}</h3>
-                      <button class="btn-icon" (click)="clearChat()">🗑️</button>
+                      <div class="chat-title-wrap">
+                        <h3>Chat with {{ selectedAdmin()?.name || selectedConversation()?.adminName || 'Administrator' }}</h3>
+                        <p class="chat-subtitle">Realtime conversation</p>
+                      </div>
+                      <button class="btn-icon" (click)="clearChat()"><span class="material-symbols-rounded app-icon">cleaning_services</span></button>
                     </div>
                     <div class="messages-container">
                       @if (chatMessages().length > 0) {
@@ -567,7 +619,12 @@ interface ExtendedEmployeeDashboardStats {
                           <div class="message" [class.sent]="msg.senderId === currentUserId()">
                             <div class="message-bubble">
                               <p>{{ msg.content }}</p>
-                              <small>{{ msg.timestamp | date: 'HH:mm' }}</small>
+                              <div class="message-meta">
+                                <small>{{ msg.timestamp | date: 'HH:mm' }}</small>
+                                @if (msg.senderId === currentUserId()) {
+                                  <span class="seen-state" [class.seen]="msg.isRead">{{ msg.isRead ? 'Seen' : 'Sent' }}</span>
+                                }
+                              </div>
                             </div>
                           </div>
                         }
@@ -583,7 +640,7 @@ interface ExtendedEmployeeDashboardStats {
                              [(ngModel)]="chatMessage"
                              (keydown.enter)="sendChatMessage()"
                              class="chat-input">
-                      <button class="btn-icon" (click)="sendChatMessage()">📤</button>
+                      <button class="btn-icon chat-send-btn" (click)="sendChatMessage()"><span class="material-symbols-rounded app-icon">send</span></button>
                     </div>
                   } @else {
                     <div class="no-conversation">
@@ -613,22 +670,22 @@ interface ExtendedEmployeeDashboardStats {
 
                 <div class="profile-stats">
                   <div class="stat-card">
-                    <span class="stat-icon">📋</span>
+                    <span class="stat-icon material-symbols-rounded app-icon">psychology</span>
                     <span class="stat-value">{{ getDashboardStats().totalTasks }}</span>
                     <span class="stat-label">Total Tasks</span>
                   </div>
                   <div class="stat-card">
-                    <span class="stat-icon">✅</span>
+                    <span class="stat-icon material-symbols-rounded app-icon">task_alt</span>
                     <span class="stat-value">{{ getDashboardStats().completedTasks }}</span>
                     <span class="stat-label">Completed</span>
                   </div>
                   <div class="stat-card">
-                    <span class="stat-icon">📁</span>
+                    <span class="stat-icon material-symbols-rounded app-icon">folder</span>
                     <span class="stat-value">{{ getDashboardStats().activeProjects }}</span>
                     <span class="stat-label">Projects</span>
                   </div>
                   <div class="stat-card">
-                    <span class="stat-icon">⭐</span>
+                    <span class="stat-icon material-symbols-rounded app-icon">star</span>
                     <span class="stat-value">{{ getDashboardStats().performanceRating }}</span>
                     <span class="stat-label">Performance</span>
                   </div>
@@ -689,1208 +746,7 @@ interface ExtendedEmployeeDashboardStats {
       }
     </div>
   `,
-  styles: `
-    .dashboard-container {
-      display: flex;
-      height: 100vh;
-      background: linear-gradient(120deg, #d9fff3 0%, #e9fff7 42%, #f6fffb 100%);
-      font-family: 'Inter', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    }
-
-    .access-denied {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 20px;
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-      color: white;
-      padding: 20px;
-      text-align: center;
-    }
-
-    .denied-icon {
-      font-size: 80px;
-    }
-
-    .user-role-info {
-      font-size: 16px;
-      margin: 10px 0;
-      background: rgba(255, 255, 255, 0.2);
-      padding: 10px 20px;
-      border-radius: 8px;
-    }
-
-    .back-btn {
-      padding: 12px 24px;
-      background: white;
-      color: #10b981;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: 600;
-      transition: all 0.3s;
-    }
-
-    .back-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
-    }
-
-    /* Sidebar */
-    .sidebar {
-      width: 260px;
-      background: linear-gradient(180deg, #047857 0%, #059669 100%);
-      border-right: 1px solid rgba(255, 255, 255, 0.2);
-      display: flex;
-      flex-direction: column;
-      padding: 20px;
-      box-shadow: 0 12px 24px rgba(4, 120, 87, 0.28);
-    }
-
-    .sidebar-header {
-      margin-bottom: 30px;
-    }
-
-    .logo {
-      font-size: 22px;
-      font-weight: 700;
-      color: #ffffff;
-      margin: 0;
-    }
-
-    .sidebar-nav {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      flex: 1;
-    }
-
-    .nav-item {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px 16px;
-      color: #d4fff2;
-      text-decoration: none;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.2s;
-      font-weight: 600;
-    }
-
-    .nav-item:hover,
-    .nav-item.active {
-      background: rgba(255, 255, 255, 0.2);
-      color: #ffffff;
-    }
-
-    .nav-item:hover {
-      text-decoration: none;
-    }
-
-    .nav-item .icon {
-      font-size: 18px;
-    }
-
-    .sidebar-footer {
-      padding-top: 20px;
-      border-top: 1px solid rgba(255, 255, 255, 0.25);
-    }
-
-    .logout-btn {
-      width: 100%;
-      padding: 12px;
-      background: #ef4444;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: 600;
-      transition: all 0.3s;
-    }
-
-    .logout-btn:hover {
-      background: #dc2626;
-      transform: translateY(-2px);
-    }
-
-    /* Main Content */
-    .main-content {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      position: relative;
-      background: rgba(255, 255, 255, 0.6);
-    }
-
-    /* Top Bar */
-    .top-bar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 20px 30px;
-      background: linear-gradient(120deg, #ffffff 0%, #ecfff7 100%);
-      border-bottom: 1px solid #e0e0e0;
-      box-shadow: 0 4px 12px rgba(34, 34, 59, 0.08);
-      z-index: 10;
-    }
-
-    .top-bar h1 {
-      margin: 0;
-      color: #1f2937;
-      font-size: 22px;
-      font-weight: 700;
-    }
-
-    .header-right {
-      display: flex;
-      align-items: center;
-      gap: 20px;
-    }
-
-    .notifications {
-      font-size: 20px;
-      cursor: pointer;
-      position: relative;
-    }
-
-    .notification-badge {
-      position: absolute;
-      top: -5px;
-      right: -5px;
-      background: #ef4444;
-      color: white;
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      font-size: 11px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .user-profile {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .user-profile img {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-    }
-
-    .user-name {
-      margin: 0;
-      font-weight: 600;
-      color: #1f2937;
-      font-size: 14px;
-    }
-
-    .user-role {
-      margin: 0;
-      color: #6b7280;
-      font-size: 12px;
-    }
-
-    /* Notifications Panel */
-    .notifications-panel {
-      position: absolute;
-      top: 80px;
-      right: 30px;
-      width: 350px;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-      z-index: 1000;
-      border: 1px solid #e5e7eb;
-    }
-
-    .notifications-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 16px 20px;
-      border-bottom: 1px solid #e5e7eb;
-    }
-
-    .notifications-header h3 {
-      margin: 0;
-      font-size: 16px;
-      color: #1f2937;
-    }
-
-    .notifications-list {
-      max-height: 400px;
-      overflow-y: auto;
-    }
-
-    .notification-item {
-      display: flex;
-      align-items: flex-start;
-      padding: 12px 20px;
-      border-bottom: 1px solid #f3f4f6;
-      transition: all 0.3s;
-    }
-
-    .notification-item:hover {
-      background: #f9fafb;
-    }
-
-    .notification-item.unread {
-      background: #eef1ff;
-    }
-
-    .notification-icon {
-      font-size: 20px;
-      margin-right: 12px;
-      margin-top: 2px;
-    }
-
-    .notification-content {
-      flex: 1;
-    }
-
-    .notification-content p {
-      margin: 0 0 4px 0;
-      color: #1f2937;
-      font-size: 14px;
-    }
-
-    .notification-content small {
-      color: #9ca3af;
-      font-size: 12px;
-    }
-
-    .empty-notifications {
-      padding: 30px;
-      text-align: center;
-      color: #9ca3af;
-    }
-
-    /* Content Area */
-    .content {
-      flex: 1;
-      overflow-y: auto;
-      padding: 24px;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(235, 255, 247, 0.8) 100%);
-    }
-
-    .section {
-      margin-bottom: 40px;
-    }
-
-    .section h2 {
-      color: #1f2937;
-      margin-bottom: 20px;
-      font-size: 20px;
-    }
-
-    .section-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 30px;
-    }
-
-    .filter-controls {
-      display: flex;
-      gap: 10px;
-    }
-
-    /* Stats Grid */
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 20px;
-      margin-bottom: 40px;
-    }
-
-    .stat-card {
-      background: linear-gradient(170deg, #ffffff 0%, #ecfff9 100%);
-      padding: 24px;
-      border-radius: 12px;
-      border: 1px solid #bdebdc;
-      box-shadow: 0 6px 16px rgba(5, 150, 105, 0.2);
-      transition: all 0.3s;
-    }
-
-    .stat-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 14px 24px rgba(5, 150, 105, 0.28);
-    }
-
-    .stat-header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-
-    .stat-icon {
-      font-size: 28px;
-    }
-
-    .stat-header h3 {
-      margin: 0;
-      color: #6b7280;
-      font-size: 14px;
-      font-weight: 500;
-    }
-
-    .stat-value {
-      margin: 0;
-      font-size: 32px;
-      font-weight: 700;
-      color: #1f2937;
-    }
-
-    .stat-label {
-      margin: 8px 0 0;
-      color: #9ca3af;
-      font-size: 13px;
-    }
-
-    /* Tasks List */
-    .tasks-list {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .task-card {
-      background: white;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-      transition: all 0.3s;
-    }
-
-    .task-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
-    }
-
-    .task-card.overdue {
-      border-left: 4px solid #ef4444;
-    }
-
-    .task-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 12px;
-    }
-
-    .task-header h3 {
-      margin: 0;
-      color: #1f2937;
-      font-size: 16px;
-      flex: 1;
-    }
-
-    .task-status-badges {
-      display: flex;
-      gap: 8px;
-    }
-
-    .task-description {
-      color: #6b7280;
-      font-size: 14px;
-      margin-bottom: 16px;
-    }
-
-    .task-meta {
-      display: flex;
-      gap: 16px;
-      color: #6b7280;
-      font-size: 13px;
-      margin-bottom: 16px;
-      flex-wrap: wrap;
-    }
-
-    .overdue-label {
-      color: #ef4444;
-      font-weight: bold;
-    }
-
-    .progress-section {
-      margin-bottom: 16px;
-    }
-
-    .progress-controls {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 8px;
-    }
-
-    .progress-controls label {
-      font-size: 13px;
-      color: #6b7280;
-    }
-
-    .progress-controls input[type="range"] {
-      flex: 1;
-    }
-
-    .progress-bar-container {
-      width: 100%;
-      height: 8px;
-      background: #e5e7eb;
-      border-radius: 4px;
-      overflow: hidden;
-    }
-
-    .progress-bar {
-      height: 100%;
-      background: linear-gradient(90deg, #10b981 0%, #059669 100%);
-      transition: width 0.3s ease;
-    }
-
-    .task-comments {
-      margin-bottom: 16px;
-      padding-top: 16px;
-      border-top: 1px solid #f3f4f6;
-    }
-
-    .task-comments h4 {
-      margin: 0 0 12px 0;
-      font-size: 14px;
-      color: #1f2937;
-    }
-
-    .comment {
-      background: #f9fafb;
-      padding: 8px 12px;
-      border-radius: 6px;
-      margin-bottom: 8px;
-    }
-
-    .comment strong {
-      color: #1f2937;
-    }
-
-    .comment small {
-      display: block;
-      color: #9ca3af;
-      font-size: 11px;
-      margin-top: 2px;
-    }
-
-    .no-comments {
-      color: #9ca3af;
-      font-style: italic;
-      font-size: 13px;
-      margin-bottom: 12px;
-    }
-
-    .add-comment {
-      display: flex;
-      gap: 8px;
-    }
-
-    .add-comment input {
-      flex: 1;
-      padding: 8px 12px;
-      border: 1px solid #d1d5db;
-      border-radius: 6px;
-      font-size: 13px;
-    }
-
-    .task-actions {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    /* Projects Grid */
-    .projects-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 24px;
-    }
-
-    .project-card {
-      background: white;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-      transition: all 0.3s;
-    }
-
-    .project-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
-    }
-
-    .project-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 12px;
-    }
-
-    .project-header h3 {
-      margin: 0;
-      color: #1f2937;
-      font-size: 16px;
-      flex: 1;
-    }
-
-    .badge {
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-    }
-
-    .status-planning {
-      background: #dbeafe;
-      color: #0369a1;
-    }
-
-    .status-in-progress {
-      background: #fed7aa;
-      color: #b45309;
-    }
-
-    .status-on-hold {
-      background: #f3f4f6;
-      color: #6b7280;
-    }
-
-    .status-completed {
-      background: #dcfce7;
-      color: #166534;
-    }
-
-    .status-active {
-      background: #dcfce7;
-      color: #166534;
-    }
-
-    .project-description {
-      color: #6b7280;
-      font-size: 14px;
-      margin-bottom: 16px;
-    }
-
-    .project-meta {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      margin-bottom: 12px;
-      font-size: 13px;
-      color: #6b7280;
-      flex-wrap: wrap;
-    }
-
-    .project-stats {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-
-    .stat {
-      text-align: center;
-      padding: 8px;
-      background: #f9fafb;
-      border-radius: 8px;
-    }
-
-    .stat-label {
-      display: block;
-      color: #6b7280;
-      font-size: 11px;
-      margin-bottom: 4px;
-    }
-
-    .stat-value {
-      display: block;
-      font-weight: 700;
-      color: #1f2937;
-      font-size: 16px;
-    }
-
-    .project-team {
-      margin-bottom: 16px;
-    }
-
-    .project-team h4 {
-      margin: 0 0 8px 0;
-      font-size: 13px;
-      color: #1f2937;
-    }
-
-    .team-avatars {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .team-avatar {
-      width: 30px;
-      height: 30px;
-      border-radius: 50%;
-    }
-
-    .project-dates {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 12px;
-      font-size: 12px;
-      color: #6b7280;
-    }
-
-    .project-actions {
-      display: flex;
-      gap: 8px;
-      margin-top: 16px;
-    }
-
-    /* Priority & Status Badges */
-    .priority-badge {
-      padding: 4px 12px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 700;
-    }
-
-    .priority-low {
-      background: #dbeafe;
-      color: #0369a1;
-    }
-
-    .priority-medium {
-      background: #fed7aa;
-      color: #b45309;
-    }
-
-    .priority-high {
-      background: #fed7aa;
-      color: #ea580c;
-    }
-
-    .priority-urgent {
-      background: #fecaca;
-      color: #991b1b;
-    }
-
-    .status-badge {
-      padding: 4px 12px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 600;
-    }
-
-    .status-todo {
-      background: #f3f4f6;
-      color: #6b7280;
-    }
-
-    .status-in-progress {
-      background: #fef3c7;
-      color: #92400e;
-    }
-
-    .status-done {
-      background: #dcfce7;
-      color: #166534;
-    }
-
-    /* Buttons */
-    .btn {
-      padding: 10px 20px;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: 600;
-      transition: all 0.3s;
-      font-size: 14px;
-    }
-
-    .btn-primary {
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-      color: white;
-    }
-
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 16px rgba(16, 185, 129, 0.4);
-    }
-
-    .btn-secondary {
-      background: #e5e7eb;
-      color: #1f2937;
-    }
-
-    .btn-secondary:hover {
-      background: #d1d5db;
-    }
-
-    .btn-danger {
-      background: #ef4444;
-      color: white;
-    }
-
-    .btn-danger:hover {
-      background: #dc2626;
-    }
-
-    .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      transform: none !important;
-    }
-
-    .btn-small {
-      padding: 8px 16px;
-      background: #f3f4f6;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 600;
-      transition: all 0.3s;
-    }
-
-    .btn-small:hover {
-      background: #e5e7eb;
-    }
-
-    .btn-icon {
-      width: 36px;
-      height: 36px;
-      border: none;
-      background: #f3f4f6;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 18px;
-      transition: all 0.3s;
-    }
-
-    .btn-icon:hover {
-      background: #e5e7eb;
-    }
-
-    .btn-icon.small {
-      width: 28px;
-      height: 28px;
-      font-size: 14px;
-    }
-
-    /* Inputs */
-    .input {
-      padding: 10px 12px;
-      border: 1px solid #d1d5db;
-      border-radius: 8px;
-      font-family: inherit;
-      font-size: 14px;
-      transition: all 0.3s;
-    }
-
-    .input:focus {
-      outline: none;
-      border-color: #10b981;
-      box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
-    }
-
-    /* Chat Styles */
-    .chat-container {
-      display: flex;
-      gap: 20px;
-      height: 600px;
-      background: white;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-    }
-
-    .chat-sidebar {
-      width: 300px;
-      border-right: 1px solid #e5e7eb;
-      padding: 20px;
-      overflow-y: auto;
-    }
-
-    .chat-sidebar h3 {
-      margin: 0 0 16px;
-      color: #1f2937;
-      font-size: 16px;
-    }
-
-    .admins-list, .conversations-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-bottom: 24px;
-    }
-
-    .admin-item, .conversation-item {
-      display: flex;
-      gap: 12px;
-      padding: 12px;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.3s;
-      position: relative;
-    }
-
-    .admin-item:hover, .conversation-item:hover {
-      background: #f9fafb;
-    }
-
-    .admin-item.active, .conversation-item.active {
-      background: #f0f9ff;
-    }
-
-    .admin-avatar, .conv-avatar {
-      flex-shrink: 0;
-    }
-
-    .admin-avatar img, .conv-avatar img {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-    }
-
-    .admin-info, .conv-info {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .admin-info h4, .conv-info h4 {
-      margin: 0;
-      color: #1f2937;
-      font-size: 14px;
-      font-weight: 600;
-    }
-
-    .admin-email {
-      margin: 2px 0 0;
-      color: #9ca3af;
-      font-size: 12px;
-    }
-
-    .conv-preview {
-      margin: 4px 0 0;
-      color: #9ca3af;
-      font-size: 12px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .unread-badge {
-      position: absolute;
-      right: 12px;
-      top: 50%;
-      transform: translateY(-50%);
-      background: #10b981;
-      color: white;
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 11px;
-      font-weight: 700;
-    }
-
-    .empty-admins, .empty-conversations {
-      text-align: center;
-      padding: 20px;
-      color: #9ca3af;
-    }
-
-    .chat-main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      padding: 20px;
-    }
-
-    .chat-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-bottom: 16px;
-      border-bottom: 1px solid #e5e7eb;
-      margin-bottom: 16px;
-    }
-
-    .chat-header h3 {
-      margin: 0;
-      color: #1f2937;
-    }
-
-    .messages-container {
-      flex: 1;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-
-    .message {
-      display: flex;
-      justify-content: flex-start;
-    }
-
-    .message.sent {
-      justify-content: flex-end;
-    }
-
-    .message-bubble {
-      max-width: 70%;
-      padding: 12px 16px;
-      border-radius: 12px;
-      background: #f3f4f6;
-      color: #1f2937;
-    }
-
-    .message.sent .message-bubble {
-      background: #10b981;
-      color: white;
-    }
-
-    .message-bubble p {
-      margin: 0;
-      font-size: 14px;
-    }
-
-    .message-bubble small {
-      display: block;
-      margin-top: 4px;
-      opacity: 0.7;
-      font-size: 12px;
-    }
-
-    .chat-input-area {
-      display: flex;
-      gap: 12px;
-      margin-top: auto;
-    }
-
-    .chat-input {
-      flex: 1;
-      padding: 12px;
-      border: 1px solid #d1d5db;
-      border-radius: 8px;
-      font-family: inherit;
-      font-size: 14px;
-    }
-
-    .no-conversation {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      color: #9ca3af;
-    }
-
-    .no-messages {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      color: #9ca3af;
-      font-style: italic;
-    }
-
-    /* Profile Styles */
-    .profile-container {
-      background: white;
-      border-radius: 12px;
-      padding: 30px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-    }
-
-    .profile-header {
-      display: flex;
-      align-items: center;
-      gap: 24px;
-      margin-bottom: 40px;
-    }
-
-    .profile-avatar {
-      width: 120px;
-      height: 120px;
-      border-radius: 50%;
-      border: 4px solid #f0f9ff;
-    }
-
-    .profile-info {
-      flex: 1;
-    }
-
-    .profile-info h2 {
-      margin: 0 0 8px 0;
-      color: #1f2937;
-      font-size: 28px;
-    }
-
-    .profile-role {
-      margin: 0 0 4px 0;
-      color: #10b981;
-      font-weight: 600;
-      font-size: 16px;
-    }
-
-    .profile-email {
-      margin: 0 0 4px 0;
-      color: #6b7280;
-      font-size: 14px;
-    }
-
-    .profile-id {
-      margin: 0;
-      color: #9ca3af;
-      font-size: 12px;
-    }
-
-    .profile-stats {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 20px;
-      margin-bottom: 40px;
-    }
-
-    .profile-stats .stat-card {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      text-align: center;
-      padding: 20px;
-    }
-
-    .profile-stats .stat-icon {
-      font-size: 32px;
-      margin-bottom: 12px;
-    }
-
-    .profile-stats .stat-value {
-      font-size: 28px;
-      margin-bottom: 4px;
-    }
-
-    .profile-stats .stat-label {
-      color: #6b7280;
-      font-size: 14px;
-    }
-
-    .profile-details {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 30px;
-      margin-bottom: 40px;
-    }
-
-    .detail-section h3 {
-      margin: 0 0 20px 0;
-      color: #1f2937;
-      font-size: 18px;
-    }
-
-    .detail-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 12px 0;
-      border-bottom: 1px solid #f3f4f6;
-    }
-
-    .detail-label {
-      color: #6b7280;
-      font-weight: 500;
-    }
-
-    .detail-value {
-      color: #1f2937;
-    }
-
-    .profile-actions {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    /* Empty States */
-    .empty-state {
-      grid-column: 1 / -1;
-      text-align: center;
-      padding: 40px;
-      color: #9ca3af;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-    }
-
-    @media (max-width: 768px) {
-      .dashboard-container {
-        flex-direction: column;
-      }
-
-      .sidebar {
-        width: 100%;
-        flex-direction: row;
-        align-items: center;
-        border-right: none;
-        border-bottom: 1px solid #e5e7eb;
-      }
-
-      .sidebar-nav {
-        flex-direction: row;
-        flex: 1;
-        margin: 0 30px;
-        overflow-x: auto;
-      }
-
-      .sidebar-nav .nav-item {
-        white-space: nowrap;
-      }
-
-      .projects-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
-
-      .chat-container {
-        flex-direction: column;
-        height: auto;
-      }
-
-      .chat-sidebar {
-        width: 100%;
-        max-height: 250px;
-      }
-
-      .profile-header {
-        flex-direction: column;
-        text-align: center;
-      }
-
-      .profile-actions {
-        justify-content: center;
-      }
-
-      .notifications-panel {
-        right: 10px;
-        left: 10px;
-        width: auto;
-      }
-    }
-  `
+  styles: ``
 })
 export class DashboardEmployeeComponent implements OnInit {
  private authService = inject(AuthService);
@@ -1918,6 +774,8 @@ export class DashboardEmployeeComponent implements OnInit {
   conversations = signal<DashboardConversation[]>([]);
   chatMessages = signal<DashboardMessage[]>([]);
   notifications = signal<Notification[]>([]);
+  taskActivities = signal<TaskActivityEntry[]>([]);
+  selectedActivityTaskId = signal<string | null>(null);
 
   dashboardStats = signal<ExtendedEmployeeDashboardStats>({
     totalTasks: 0,
@@ -1940,6 +798,7 @@ export class DashboardEmployeeComponent implements OnInit {
   taskFilter = 'all';
   taskSort = 'deadline';
   projectFilter = 'all';
+  selectedTaskProjectId: string | null = null;
 
   // Computed signals
   recentTasks = computed(() => {
@@ -1958,6 +817,10 @@ export class DashboardEmployeeComponent implements OnInit {
 
   filteredTasks = computed(() => {
     let tasks = this.tasks();
+
+    if (this.selectedTaskProjectId) {
+      tasks = tasks.filter(task => task.projectId === this.selectedTaskProjectId);
+    }
     
     // Apply filter
     switch (this.taskFilter) {
@@ -1975,6 +838,15 @@ export class DashboardEmployeeComponent implements OnInit {
         break;
       case 'high':
         tasks = tasks.filter(task => task.priority === 'high' || task.priority === 'urgent');
+        break;
+      case 'due-this-week':
+        const today = new Date();
+        const weekEnd = new Date(today);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+        tasks = tasks.filter(task => {
+          const deadline = new Date(task.deadline);
+          return deadline >= today && deadline <= weekEnd;
+        });
         break;
     }
     
@@ -1995,6 +867,9 @@ export class DashboardEmployeeComponent implements OnInit {
         break;
       case 'project':
         tasks.sort((a, b) => this.getProjectName(a.projectId).localeCompare(this.getProjectName(b.projectId)));
+        break;
+      case 'score':
+        tasks.sort((a, b) => this.getTaskScore(b) - this.getTaskScore(a));
         break;
     }
     
@@ -2028,13 +903,13 @@ export class DashboardEmployeeComponent implements OnInit {
   });
 
   ngOnInit() {
-    console.log('🚀 Employee Dashboard initialized');
+    console.log('Employee Dashboard initialized');
     const user = this.authService.getCurrentUser();
     if (user) {
       this.currentUserId.set(user.uid);
       this.userName.set(user.displayName || user.email || 'Employee');
       this.userEmail.set(user.email || '');
-      console.log('👤 Employee loaded:', user.email, 'UID:', user.uid);
+      console.log('Employee loaded:', user.email, 'UID:', user.uid);
       this.checkUserRole();
     } else {
       console.warn('No user found, redirecting to signin');
@@ -2058,7 +933,7 @@ export class DashboardEmployeeComponent implements OnInit {
       const role = await this.authService.getUserRole(userId);
       this.isEmployee.set(role === 'employee');
       this.userRole.set(role);
-      console.log('🎯 User role:', role, 'Is employee:', this.isEmployee());
+      console.log('User role:', role, 'Is employee:', this.isEmployee());
 
       if (this.isEmployee()) {
         this.loadEmployeeDashboard();
@@ -2075,7 +950,7 @@ export class DashboardEmployeeComponent implements OnInit {
 
   loadEmployeeDashboard() {
     const employeeId = this.currentUserId();
-    console.log('📊 Loading employee dashboard for:', employeeId);
+    console.log('Loading employee dashboard for:', employeeId);
 
     if (!employeeId) {
       console.error('❌ No employee ID available');
@@ -2099,7 +974,7 @@ export class DashboardEmployeeComponent implements OnInit {
   }
 
   loadEmployeeProjects(employeeId: string) {
-    console.log('🔄 Loading projects for employee:', employeeId);
+    console.log('Loading projects for employee:', employeeId);
     
     if (!employeeId) {
       console.error('❌ No employee ID found');
@@ -2125,7 +1000,7 @@ export class DashboardEmployeeComponent implements OnInit {
   }
 
   loadEmployeeTasks(employeeId: string) {
-    console.log('📋 Loading tasks for employee:', employeeId);
+    console.log('Loading tasks for employee:', employeeId);
     
     if (!employeeId) {
       console.error('❌ No employee ID found');
@@ -2147,6 +1022,10 @@ export class DashboardEmployeeComponent implements OnInit {
             }));
             this.tasks.set(formattedTasks);
             this.updateDashboardStats();
+
+            this.taskService
+              .processTaskRemindersForWindow(120)
+              .catch((error: any) => console.error('❌ Error processing task reminders:', error));
           },
           error: (error: any) => {
             console.error('❌ Error loading tasks:', error);
@@ -2176,6 +1055,14 @@ export class DashboardEmployeeComponent implements OnInit {
     
     // If it's a string, try to parse it
     if (typeof dateValue === 'string') {
+      const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue.trim());
+      if (dateOnlyMatch) {
+        const year = Number(dateOnlyMatch[1]);
+        const month = Number(dateOnlyMatch[2]) - 1;
+        const day = Number(dateOnlyMatch[3]);
+        return new Date(year, month, day, 23, 59, 59, 999);
+      }
+
       const parsed = new Date(dateValue);
       return isNaN(parsed.getTime()) ? new Date() : parsed;
     }
@@ -2184,7 +1071,7 @@ export class DashboardEmployeeComponent implements OnInit {
     return new Date();
   }
    private loadTasksDirectly(employeeId: string) {
-    console.log('🔄 Loading tasks directly for employee:', employeeId);
+    console.log('Loading tasks directly for employee:', employeeId);
     
     try {
       const tasksRef = collection(this.firestore, 'tasks');
@@ -2254,7 +1141,7 @@ export class DashboardEmployeeComponent implements OnInit {
   }
 
   updateDashboardStats() {
-    console.log('📈 Updating dashboard stats...');
+    console.log('Updating dashboard stats...');
     
     const tasks = this.tasks();
     const projects = this.myProjects();
@@ -2275,12 +1162,12 @@ export class DashboardEmployeeComponent implements OnInit {
       performanceRating
     };
     
-    console.log('📈 Dashboard stats calculated:', stats);
+    console.log('Dashboard stats calculated:', stats);
     this.dashboardStats.set(stats);
   }
 
   loadEmployeeInfo(employeeId: string) {
-    console.log('📝 Loading employee info...');
+    console.log('Loading employee info...');
     const usersRef = collection(this.firestore, 'users');
     const q = query(usersRef, where('uid', '==', employeeId));
     
@@ -2321,7 +1208,7 @@ export class DashboardEmployeeComponent implements OnInit {
   }
 
   loadConversations(employeeId: string) {
-    console.log('💬 Loading conversations for employee:', employeeId);
+    console.log('Loading conversations for employee:', employeeId);
     
     if (!employeeId) {
       console.error('❌ No employee ID provided');
@@ -2355,7 +1242,7 @@ export class DashboardEmployeeComponent implements OnInit {
             };
           });
           
-          console.log('✅ Conversations loaded:', conversations.length);
+          console.log('Conversations loaded:', conversations.length);
           this.conversations.set(conversations);
         })
         .catch((error: any) => {
@@ -2370,61 +1257,23 @@ export class DashboardEmployeeComponent implements OnInit {
 
   loadMessages(userId1: string, userId2: string) {
     console.log('📨 Loading messages between', userId1, 'and', userId2);
-    
-    try {
-      const messagesRef = collection(this.firestore, 'messages');
-      
-      // Generate conversation ID both ways
-      const conversationId1 = `${userId1}_${userId2}`;
-      const conversationId2 = `${userId2}_${userId1}`;
-      
-      const q = query(
-        messagesRef,
-        where('conversationId', 'in', [conversationId1, conversationId2]),
-        orderBy('timestamp', 'asc')
-      );
 
-      from(getDocs(q))
-        .pipe(
-          takeUntilDestroyed(this.destroyRef),
-          catchError((error: any) => {
-            console.error('❌ Error loading messages:', error);
-            return of({ docs: [] } as any);
-          })
-        )
-        .subscribe({
-          next: (snapshot) => {
-            const messages: DashboardMessage[] = snapshot.docs.map((doc: QueryDocumentSnapshot) => {
-              const data = doc.data();
-              return {
-                id: doc.id,
-                senderId: data['senderId'] || '',
-                senderName: data['senderName'] || '',
-                senderRole: data['senderRole'] || 'admin',
-                content: data['content'] || '',
-                timestamp: data['timestamp']?.toDate ? data['timestamp'].toDate() : data['timestamp'],
-                isRead: data['isRead'] || false,
-                conversationId: data['conversationId'] || ''
-              };
-            });
-            
-            console.log('✅ Messages loaded:', messages.length);
-            this.chatMessages.set(messages);
-            
-            // Auto-scroll to bottom
-            setTimeout(() => {
-              this.scrollToBottom();
-            }, 100);
-          },
-          error: (error: any) => {
-            console.error('❌ Subscription error in loadMessages:', error);
-            this.chatMessages.set([]);
-          }
-        });
-    } catch (error: any) {
-      console.error('❌ Exception in loadMessages:', error);
-      this.chatMessages.set([]);
-    }
+    this.chatService.getConversationMessages(userId1, userId2)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (messages) => {
+          console.log('Messages loaded (realtime):', messages.length);
+          this.chatMessages.set(messages as DashboardMessage[]);
+          void this.markConversationSeen(userId1, userId2);
+          setTimeout(() => {
+            this.scrollToBottom();
+          }, 100);
+        },
+        error: (error: any) => {
+          console.error('❌ Subscription error in loadMessages:', error);
+          this.chatMessages.set([]);
+        }
+      });
   }
 
   onTabChange(tab: 'dashboard' | 'projects' | 'tasks' | 'chat' | 'profile', event?: Event) {
@@ -2502,10 +1351,9 @@ export class DashboardEmployeeComponent implements OnInit {
 
   isTaskOverdue(task: Task): boolean {
     if (!task.deadline) return false;
-    const deadline = new Date(task.deadline);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return deadline < today && task.status !== 'done';
+    const deadline = this.formatDate(task.deadline);
+    deadline.setHours(23, 59, 59, 999);
+    return deadline.getTime() < Date.now() && task.status !== 'done';
   }
 
   getUnreadCount(adminId: string): number {
@@ -2548,6 +1396,7 @@ export class DashboardEmployeeComponent implements OnInit {
 
   viewAllTasks() {
     this.activeTab.set('tasks');
+    this.clearProjectTaskScope();
   }
 
   viewAllProjects() {
@@ -2571,12 +1420,12 @@ export class DashboardEmployeeComponent implements OnInit {
       status: updatedTask.status
     })
       .then(() => {
-        console.log('✅ Task progress updated');
+        console.log('Task progress updated');
         this.loadEmployeeTasks(this.currentUserId());
       })
       .catch((error: any) => {
         console.error('❌ Error updating task progress:', error);
-        alert('Error updating task: ' + error.message);
+        void this.showAlert('Error updating task: ' + error.message, 'error', 'Task Error');
       });
   }
 
@@ -2597,7 +1446,7 @@ export class DashboardEmployeeComponent implements OnInit {
       status: updatedTask.status
     })
       .then(() => {
-        console.log('✅ Task progress updated from range');
+        console.log('Task progress updated from range');
         this.loadEmployeeTasks(this.currentUserId());
       })
       .catch((error: any) => {
@@ -2617,17 +1466,17 @@ export class DashboardEmployeeComponent implements OnInit {
       completionPercentage: 100
     })
       .then(() => {
-        console.log('✅ Task marked as done');
+        console.log('Task marked as done');
         this.loadEmployeeTasks(this.currentUserId());
       })
       .catch((error: any) => {
         console.error('❌ Error updating task status:', error);
-        alert('Error updating task: ' + error.message);
+        void this.showAlert('Error updating task: ' + error.message, 'error', 'Task Error');
       });
   }
 
-  addComment(task: Task) {
-    const comment = prompt('Enter your comment:');
+  async addComment(task: Task) {
+    const comment = await this.showTextInput('Add Comment', 'Enter your comment');
     if (comment) {
       this.taskService.addCommentToTask(
         task.id,
@@ -2637,12 +1486,12 @@ export class DashboardEmployeeComponent implements OnInit {
         comment
       )
         .then(() => {
-          console.log('✅ Comment added');
+          console.log('Comment added');
           this.loadEmployeeTasks(this.currentUserId());
         })
         .catch((error: any) => {
           console.error('❌ Error adding comment:', error);
-          alert('Error adding comment: ' + error.message);
+          void this.showAlert('Error adding comment: ' + error.message, 'error', 'Comment Error');
         });
     }
   }
@@ -2658,32 +1507,144 @@ export class DashboardEmployeeComponent implements OnInit {
         comment
       )
         .then(() => {
-          console.log('✅ Comment added');
+          console.log('Comment added');
           inputElement.value = '';
           this.loadEmployeeTasks(this.currentUserId());
         })
         .catch((error: any) => {
           console.error('❌ Error adding comment:', error);
-          alert('Error adding comment: ' + error.message);
+          void this.showAlert('Error adding comment: ' + error.message, 'error', 'Comment Error');
         });
     }
   }
 
+  getTaskScore(task: Task): number {
+    return this.taskService.getTaskPriorityScore(task);
+  }
+
+  openTaskActivity(taskId: string) {
+    this.selectedActivityTaskId.set(taskId);
+    this.taskService.getTaskActivity(taskId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (entries) => this.taskActivities.set(entries),
+        error: (error: any) => {
+          console.error('❌ Error loading task activity:', error);
+          this.taskActivities.set([]);
+        }
+      });
+  }
+
+  async setTaskRemindersPrompt(task: Task) {
+    const currentValue = (task.reminderOffsetsMinutes || []).join(', ');
+    const input = await this.showTextInput('Reminders', 'Enter reminder offsets in minutes (comma separated)', currentValue);
+    if (input === null) {
+      return;
+    }
+
+    const reminderOffsets = this.parseNumberList(input);
+
+    try {
+      await this.taskService.setTaskReminders(
+        task.id,
+        reminderOffsets,
+        this.currentUserId(),
+        this.userName(),
+        'employee'
+      );
+      this.loadEmployeeTasks(this.currentUserId());
+    } catch (error: any) {
+      console.error('❌ Error updating reminders:', error);
+      await this.showAlert('Failed to update reminders: ' + error.message, 'error', 'Reminder Update Failed');
+    }
+  }
+
+  async logOneHour(taskId: string) {
+    try {
+      await this.taskService.addActualHours(taskId, 1);
+      this.loadEmployeeTasks(this.currentUserId());
+    } catch (error: any) {
+      console.error('❌ Error logging one hour:', error);
+      await this.showAlert('Failed to log time: ' + error.message, 'error', 'Time Log Failed');
+    }
+  }
+
+  private parseNumberList(value: string): number[] {
+    if (!value || typeof value !== 'string') {
+      return [];
+    }
+
+    return value
+      .split(',')
+      .map(item => Number(item.trim()))
+      .filter(item => !Number.isNaN(item) && item > 0)
+      .map(item => Math.round(item));
+  }
+
+  private async showAlert(message: string, icon: 'success' | 'error' | 'info' = 'info', title = 'Notification') {
+    await Swal.fire({
+      title,
+      text: message,
+      icon,
+      confirmButtonText: 'OK'
+    });
+  }
+
+  private async showConfirm(message: string, title = 'Please Confirm'): Promise<boolean> {
+    const result = await Swal.fire({
+      title,
+      text: message,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Confirm',
+      cancelButtonText: 'Cancel'
+    });
+    return result.isConfirmed;
+  }
+
+  private async showTextInput(
+    title: string,
+    label: string,
+    currentValue = '',
+    inputType: 'text' | 'textarea' = 'text'
+  ): Promise<string | null> {
+    const result = await Swal.fire({
+      title,
+      input: inputType,
+      inputLabel: label,
+      inputValue: currentValue,
+      showCancelButton: true,
+      confirmButtonText: 'Save',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (!result.isConfirmed) {
+      return null;
+    }
+
+    return String(result.value ?? '').trim();
+  }
+
   viewTaskDetails(task: Task) {
     console.log('View task details:', task);
-    alert(`Task Details:\n\nTitle: ${task.title}\nDescription: ${task.description}\nStatus: ${task.status}\nProgress: ${task.completionPercentage}%`);
+    void this.showAlert(`Title: ${task.title}\nDescription: ${task.description}\nStatus: ${task.status}\nProgress: ${task.completionPercentage}%`, 'info', 'Task Details');
   }
 
   viewProjectDetails(project: Project) {
     console.log('View project details:', project);
-    alert(`Project Details:\n\nName: ${project.name}\nDescription: ${project.description}\nStatus: ${project.status}\nCompletion: ${project.completionPercentage || 0}%`);
+    void this.showAlert(`Name: ${project.name}\nDescription: ${project.description}\nStatus: ${project.status}\nCompletion: ${project.completionPercentage || 0}%`, 'info', 'Project Details');
   }
 
   viewProjectTasks(project: Project) {
     console.log('View project tasks:', project);
     this.activeTab.set('tasks');
-    this.projectFilter = 'all';
+    this.selectedTaskProjectId = project.id;
     this.taskFilter = 'all';
+    this.taskSort = 'deadline';
+  }
+
+  clearProjectTaskScope() {
+    this.selectedTaskProjectId = null;
   }
 
   chatWithAdmin(adminId: string) {
@@ -2710,7 +1671,7 @@ export class DashboardEmployeeComponent implements OnInit {
       event.stopPropagation();
     }
     
-    console.log('🎯 Selecting admin:', admin.name);
+    console.log('Selecting admin:', admin.name);
     this.selectedAdmin.set(admin);
     this.selectedConversation.set(null);
     this.loadMessages(this.currentUserId(), admin.id);
@@ -2722,7 +1683,7 @@ export class DashboardEmployeeComponent implements OnInit {
       event.stopPropagation();
     }
     
-    console.log('🎯 Selecting conversation with:', conv.adminName);
+    console.log('Selecting conversation with:', conv.adminName);
     this.selectedConversation.set(conv);
     this.selectedAdmin.set(null);
     this.loadMessages(this.currentUserId(), conv.adminId);
@@ -2740,6 +1701,15 @@ export class DashboardEmployeeComponent implements OnInit {
     this.selectedAdmin.set(null);
   }
 
+  private async markConversationSeen(userId1: string, userId2: string) {
+    try {
+      await this.chatService.markConversationAsRead(userId1, userId2, this.currentUserId());
+      this.loadConversations(this.currentUserId());
+    } catch (error) {
+      console.error('❌ Error marking conversation as seen:', error);
+    }
+  }
+
   async sendChatMessage() {
     const user = this.authService.getCurrentUser();
     if (!user) {
@@ -2747,43 +1717,40 @@ export class DashboardEmployeeComponent implements OnInit {
       return;
     }
     
-    if (!this.chatMessage.trim()) {
+    const messageContent = this.chatMessage.trim();
+    if (!messageContent) {
       return;
     }
     
     const recipientId = this.selectedAdmin()?.id || this.selectedConversation()?.adminId;
     if (!recipientId) {
-      alert('Please select an administrator to chat with');
+      await this.showAlert('Please select an administrator to chat with', 'info', 'Select Recipient');
       return;
     }
     
-    console.log('📤 Sending message to admin:', recipientId);
+    console.log('Sending message to admin:', recipientId);
     
     try {
+      this.chatMessage = '';
+
       await this.chatService.sendMessage(
         this.currentUserId(),
         this.userName(),
         'employee',
         recipientId,
-        this.chatMessage
+        messageContent
       );
-      
-      this.chatMessage = '';
-      
-      // Reload messages after sending
-      setTimeout(() => {
-        this.loadMessages(this.currentUserId(), recipientId);
-      }, 500);
-      
+
     } catch (error: any) {
+      this.chatMessage = messageContent;
       console.error('❌ Error sending message:', error);
-      alert('Failed to send message. Please try again.');
+      await this.showAlert('Failed to send message. Please try again.', 'error', 'Chat Error');
     }
   }
 
   // Profile Methods
   editProfile() {
-    alert('Edit profile functionality coming soon!');
+    void this.showAlert('Edit profile functionality coming soon!', 'info', 'Not Yet Available');
   }
 
     changePassword() {
@@ -2794,20 +1761,20 @@ export class DashboardEmployeeComponent implements OnInit {
       import('firebase/auth').then(({ sendPasswordResetEmail }) => {
         sendPasswordResetEmail(this.auth, userEmail)
           .then(() => {
-            alert('Password reset email sent! Check your inbox.');
+            void this.showAlert('Password reset email sent! Check your inbox.', 'success', 'Password Reset');
           })
           .catch((error: any) => {
-            alert('Error sending password reset email: ' + error.message);
+            void this.showAlert('Error sending password reset email: ' + error.message, 'error', 'Password Reset Failed');
           });
       });
     } else {
-      alert('Cannot change password: No user email found or not authenticated');
+      void this.showAlert('Cannot change password: No user email found or not authenticated', 'error', 'Password Reset Failed');
     }
   }
 
 
-  updateSkills() {
-    const skills = prompt('Enter your skills (comma separated):');
+  async updateSkills() {
+    const skills = await this.showTextInput('Skills', 'Enter your skills (comma separated)');
     if (skills) {
       // Update skills in Firestore
       const userId = this.currentUserId();
@@ -2824,10 +1791,10 @@ export class DashboardEmployeeComponent implements OnInit {
             skills: skills.split(',').map(s => s.trim())
           }, { merge: true })
             .then(() => {
-              alert('Skills updated successfully!');
+              void this.showAlert('Skills updated successfully!', 'success', 'Skills Updated');
             })
             .catch((error: any) => {
-              alert('Error updating skills: ' + error.message);
+              void this.showAlert('Error updating skills: ' + error.message, 'error', 'Skills Update Failed');
             });
         }
       });
@@ -2835,12 +1802,12 @@ export class DashboardEmployeeComponent implements OnInit {
   }
 
   viewReports() {
-    alert('View reports functionality coming soon!');
+    void this.showAlert('View reports functionality coming soon!', 'info', 'Not Yet Available');
   }
 
-  requestAccountDeletion() {
-    if (confirm('Are you sure you want to request account deletion? This will notify administrators.')) {
-      alert('Account deletion request sent to administrators.');
+  async requestAccountDeletion() {
+    if (await this.showConfirm('Are you sure you want to request account deletion? This will notify administrators.', 'Request Account Deletion')) {
+      await this.showAlert('Account deletion request sent to administrators.', 'success', 'Request Sent');
     }
   }
 

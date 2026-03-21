@@ -68,14 +68,18 @@ export class ChatService {
       );
 
       const recipientIds = await this.expandNotificationRecipients(recipientId);
-      for (const resolvedRecipientId of recipientIds) {
-        await this.notificationService.notifyChatMessage(
-          resolvedRecipientId,
-          senderId,
-          senderName,
-          conversationId
-        );
-      }
+      void Promise.allSettled(
+        recipientIds.map((resolvedRecipientId) =>
+          this.notificationService.notifyChatMessage(
+            resolvedRecipientId,
+            senderId,
+            senderName,
+            conversationId
+          )
+        )
+      ).catch((error) => {
+        console.warn('Chat notification dispatch failed:', error);
+      });
 
       return docRef.id;
     } catch (error) {
@@ -158,6 +162,32 @@ export class ChatService {
   async markMessageAsRead(messageId: string): Promise<void> {
     const messageRef = doc(this.firestore, 'messages', messageId);
     await updateDoc(messageRef, { isRead: true });
+  }
+
+  async markConversationAsRead(
+    adminId: string,
+    employeeId: string,
+    viewerId: string
+  ): Promise<void> {
+    const conversationId = this.generateConversationId(adminId, employeeId);
+    const messagesRef = collection(this.firestore, 'messages');
+    const unreadQuery = query(
+      messagesRef,
+      where('conversationId', '==', conversationId),
+      where('recipientId', '==', viewerId),
+      where('isRead', '==', false)
+    );
+
+    const unreadSnapshot = await getDocs(unreadQuery);
+    for (const unreadDoc of unreadSnapshot.docs) {
+      await updateDoc(unreadDoc.ref, { isRead: true });
+    }
+
+    const conversationRef = doc(this.firestore, 'conversations', conversationId);
+    const conversationSnap = await getDoc(conversationRef);
+    if (conversationSnap.exists()) {
+      await updateDoc(conversationRef, { unreadCount: 0 });
+    }
   }
 
   /**

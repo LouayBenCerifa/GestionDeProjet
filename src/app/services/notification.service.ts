@@ -277,6 +277,25 @@ export class NotificationService {
     );
   }
 
+  async notifyTaskReminder(
+    userId: string,
+    taskId: string,
+    taskTitle: string,
+    minutesBeforeDeadline: number
+  ): Promise<void> {
+    await this.createNotificationIfNotExists(
+      {
+        userId,
+        type: 'task',
+        title: 'Task Reminder',
+        message: `Reminder: ${taskTitle} is due in ${minutesBeforeDeadline} minutes.`,
+        read: false,
+        data: { taskId, minutesBeforeDeadline }
+      },
+      `task-reminder-${taskId}-${minutesBeforeDeadline}`
+    );
+  }
+
   async notifyChatMessage(
     recipientId: string,
     senderId: string,

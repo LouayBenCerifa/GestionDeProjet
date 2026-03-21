@@ -34,10 +34,12 @@ import {
   Task,
   User,
   AdminDashboardStats,
-  Conversation
+  Conversation,
+  TaskActivityEntry
 } from '../../interfaces/models';
 import { Firestore, collection, query, where, getDocs, addDoc, doc, setDoc, getDoc, Timestamp, orderBy, QueryDocumentSnapshot } from '@angular/fire/firestore';
 import { Observable, Subscriber, catchError, of, timeout, from } from 'rxjs';
+import Swal from 'sweetalert2';
 
 // Interface for dashboard conversations - matches Conversation interface
 interface DashboardConversation {
@@ -72,7 +74,7 @@ interface DashboardMessage {
       <!-- Access Denied State -->
       @if (!isAdmin()) {
         <div class="access-denied">
-          <div class="denied-icon">🚫</div>
+          <div class="denied-icon"><span class="material-symbols-rounded app-icon">block</span></div>
           <h1>Access Denied</h1>
           <p>This dashboard is restricted to administrators only.</p>
           <p class="user-role-info">Your role: <strong>{{ userRole() }}</strong></p>
@@ -82,37 +84,37 @@ interface DashboardMessage {
         <!-- Sidebar -->
         <aside class="sidebar">
           <div class="sidebar-header">
-            <h2 class="logo">📊 GestionPro</h2>
+            <h2 class="logo"><span class="material-symbols-rounded app-icon">bolt</span> GestionPro</h2>
           </div>
           <nav class="sidebar-nav">
             <a class="nav-item" 
                [class.active]="activeTab() === 'dashboard'" 
                (click)="onTabChange('dashboard', $event)">
-              <span class="icon">📈</span> Dashboard
+              <span class="icon material-symbols-rounded app-icon">dashboard</span> Dashboard
             </a>
             
             <a class="nav-item" 
                [class.active]="activeTab() === 'projects'" 
                (click)="onTabChange('projects', $event)">
-              <span class="icon">📁</span> Projects
+              <span class="icon material-symbols-rounded app-icon">folder</span> Projects
             </a>
             
             <a class="nav-item" 
                [class.active]="activeTab() === 'tasks'" 
                (click)="onTabChange('tasks', $event)">
-              <span class="icon">✓</span> Tasks
+              <span class="icon material-symbols-rounded app-icon">task_alt</span> Tasks
             </a>
             
             <a class="nav-item" 
                [class.active]="activeTab() === 'chat'" 
                (click)="onTabChange('chat', $event)">
-              <span class="icon">💬</span> Chat
+              <span class="icon material-symbols-rounded app-icon">chat</span> Chat
             </a>
             
             <a class="nav-item" 
                [class.active]="activeTab() === 'settings'" 
                (click)="onTabChange('settings', $event)">
-              <span class="icon">⚙️</span> Settings
+              <span class="icon material-symbols-rounded app-icon">settings</span> Settings
             </a>
           </nav>
           <div class="sidebar-footer">
@@ -126,7 +128,7 @@ interface DashboardMessage {
           <header class="top-bar">
             <h1>{{ getTabTitle() }}</h1>
             <div class="header-right">
-              <div class="notifications" (click)="toggleNotifications()">🔔
+              <div class="notifications" (click)="toggleNotifications()"><span class="material-symbols-rounded app-icon">notifications</span>
                 @if (unreadNotifications() > 0) {
                   <span class="notification-badge">{{ unreadNotifications() }}</span>
                 }
@@ -145,17 +147,17 @@ interface DashboardMessage {
             <div class="notifications-panel">
               <div class="notifications-header">
                 <h3>Notifications</h3>
-                <button class="btn-icon" (click)="clearAllNotifications()">🗑️</button>
+                <button class="btn-icon" (click)="clearAllNotifications()"><span class="material-symbols-rounded app-icon">cleaning_services</span></button>
               </div>
               <div class="notifications-list">
                 @if (notifications().length > 0) {
                   @for (notification of notifications(); track notification.id) {
                     <div class="notification-item" [class.unread]="!notification.read">
                       <div class="notification-icon">
-                        @if (notification.type === 'task') { 📋 }
-                        @if (notification.type === 'project') { 📁 }
-                        @if (notification.type === 'chat') { 💬 }
-                        @if (notification.type === 'system') { ⚠️ }
+                        @if (notification.type === 'task') { <span class="material-symbols-rounded app-icon">task_alt</span> }
+                        @if (notification.type === 'project') { <span class="material-symbols-rounded app-icon">folder</span> }
+                        @if (notification.type === 'chat') { <span class="material-symbols-rounded app-icon">chat</span> }
+                        @if (notification.type === 'system') { <span class="material-symbols-rounded app-icon">warning</span> }
                       </div>
                       <div class="notification-content">
                         <p>{{ notification.message }}</p>
@@ -182,7 +184,7 @@ interface DashboardMessage {
               <div class="stats-grid">
                 <div class="stat-card">
                   <div class="stat-header">
-                    <span class="stat-icon">📊</span>
+                    <span class="stat-icon material-symbols-rounded app-icon">folder</span>
                     <h3>Total Projects</h3>
                   </div>
                   <p class="stat-value">{{ dashboardStats()?.totalProjects ?? 0 }}</p>
@@ -191,7 +193,7 @@ interface DashboardMessage {
 
                 <div class="stat-card">
                   <div class="stat-header">
-                    <span class="stat-icon">✅</span>
+                    <span class="stat-icon material-symbols-rounded app-icon">task_alt</span>
                     <h3>Task Completion</h3>
                   </div>
                   <p class="stat-value">{{ (dashboardStats()?.taskCompletionRate ?? 0).toFixed(1) }}%</p>
@@ -200,7 +202,7 @@ interface DashboardMessage {
 
                 <div class="stat-card">
                   <div class="stat-header">
-                    <span class="stat-icon">👥</span>
+                    <span class="stat-icon material-symbols-rounded app-icon">groups</span>
                     <h3>Active Employees</h3>
                   </div>
                   <p class="stat-value">{{ dashboardStats()?.activeEmployees ?? 0 }}</p>
@@ -209,7 +211,7 @@ interface DashboardMessage {
 
                 <div class="stat-card">
                   <div class="stat-header">
-                    <span class="stat-icon">⏳</span>
+                    <span class="stat-icon material-symbols-rounded app-icon">hourglass_top</span>
                     <h3>Pending Tasks</h3>
                   </div>
                   <p class="stat-value">{{ (dashboardStats()?.totalTasks ?? 0) - (dashboardStats()?.completedTasks ?? 0) }}</p>
@@ -224,16 +226,28 @@ interface DashboardMessage {
                   @if (dashboardStats()?.projectProgress && dashboardStats()!.projectProgress.length > 0) {
                     @for (project of dashboardStats()!.projectProgress; track project.projectId) {
                       <div class="progress-item">
-                        <div class="progress-header">
-                          <h3>{{ project.projectName }}</h3>
+                        <div class="progress-headline">
+                          <div class="progress-title-wrap">
+                            <span class="material-symbols-rounded app-icon progress-project-icon">folder</span>
+                            <div>
+                              <h3>{{ project.projectName }}</h3>
+                              <p class="progress-subtitle">{{ project.tasksTotal }} total tasks</p>
+                            </div>
+                          </div>
                           <span class="progress-value">{{ project.progress.toFixed(0) }}%</span>
                         </div>
-                        <div class="progress-bar-container">
-                          <div class="progress-bar" [style.width.%]="project.progress"></div>
+                        <div class="progress-track">
+                          <div class="progress-fill" [style.width.%]="project.progress"></div>
                         </div>
                         <div class="progress-meta">
-                          <span>{{ project.tasksDone }}/{{ project.tasksTotal }} tasks completed</span>
-                          <span>Due: {{ project.endDate | date: 'MMM dd, yyyy' }}</span>
+                          <span class="progress-chip">
+                            <span class="material-symbols-rounded">task_alt</span>
+                            {{ project.tasksDone }}/{{ project.tasksTotal }} completed
+                          </span>
+                          <span class="progress-chip">
+                            <span class="material-symbols-rounded">event</span>
+                            Due {{ project.endDate | date: 'MMM dd, yyyy' }}
+                          </span>
                         </div>
                       </div>
                     }
@@ -296,6 +310,28 @@ interface DashboardMessage {
                     @if (projectForm.get('status')?.invalid && projectForm.get('status')?.touched) {
                       <small class="error">Status is required</small>
                     }
+
+                    <div>
+                      <label>Team Members (can receive project tasks)</label>
+                      <div class="team-members-selector" style="display:grid; gap:8px; margin-top:8px;">
+                        @if (employees().length > 0) {
+                          @for (emp of employees(); track emp.id) {
+                            <label style="display:flex; align-items:center; gap:8px;">
+                              <input
+                                type="checkbox"
+                                [checked]="isProjectTeamMemberSelected(emp.id)"
+                                (change)="toggleProjectTeamMember(emp.id, $event)"
+                              >
+                              <span>{{ emp.name || emp.email }} ({{ emp.email }})</span>
+                            </label>
+                          }
+                        } @else {
+                          <small>No employees available</small>
+                        }
+                      </div>
+                      <small>Only selected employees can be assigned tasks in this project.</small>
+                    </div>
+
                     <div class="form-actions">
                       <button type="submit" class="btn btn-primary" [disabled]="!projectForm.valid">Create Project</button>
                       <button type="button" class="btn btn-secondary" (click)="toggleCreateProjectForm()">Cancel</button>
@@ -311,8 +347,8 @@ interface DashboardMessage {
                       <div class="project-header">
                         <h3>{{ project.name || 'Unnamed Project' }}</h3>
                         <div class="project-actions">
-                          <button class="btn-icon" (click)="editProject(project)">✏️</button>
-                          <button class="btn-icon" (click)="deleteProject(project.id)">🗑️</button>
+                          <button class="btn-icon" (click)="editProject(project)" title="Edit Team"><span class="material-symbols-rounded app-icon">groups</span></button>
+                          <button class="btn-icon" (click)="deleteProject(project)" title="Delete Project and Tasks"><span class="material-symbols-rounded app-icon">delete</span></button>
                         </div>
                       </div>
                       <p class="project-description">{{ project.description || 'No description' }}</p>
@@ -324,13 +360,22 @@ interface DashboardMessage {
                               [class.status-completed]="project.status === 'completed'">
                           {{ project.status || 'planning' | titlecase }}
                         </span>
-                        <span>Team: {{ (project.teamMembers || []).length }} members</span>
-                        <span>Tasks: {{ project.taskCount || 0 }}</span>
+                        <span class="meta-chip"><span class="material-symbols-rounded">groups</span>Team: {{ (project.teamMembers || []).length }} members</span>
+                        <span class="meta-chip"><span class="material-symbols-rounded">task_alt</span>Tasks: {{ project.taskCount || 0 }}</span>
+                        <label class="project-status-control" title="Update project status">
+                          <span class="material-symbols-rounded">sync_alt</span>
+                          <select class="input" [value]="project.status" (change)="changeProjectStatus(project, $event)">
+                            <option value="planning">Planning</option>
+                            <option value="in-progress">In Progress</option>
+                            <option value="on-hold">On Hold</option>
+                            <option value="completed">Completed</option>
+                          </select>
+                        </label>
                       </div>
                       <div class="progress-bar-container">
                         <div class="progress-bar" [style.width.%]="project.completionPercentage || 0"></div>
                       </div>
-                      <p class="progress-text">{{ (project.completionPercentage || 0).toFixed(0) }}% complete</p>
+                      <p class="progress-text">{{ project.completedTaskCount || 0 }} / {{ project.taskCount || 0 }} tasks done • {{ (project.completionPercentage || 0).toFixed(0) }}% complete</p>
                       <div class="project-dates">
                         <small>Start: {{ project.startDate | date: 'MMM dd, yyyy' }}</small>
                         <small>End: {{ project.endDate | date: 'MMM dd, yyyy' }}</small>
@@ -351,7 +396,45 @@ interface DashboardMessage {
             <section class="content">
               <div class="section-header">
                 <h2>Create & Assign Tasks</h2>
-                <button class="btn btn-primary" (click)="toggleCreateTaskForm()">+ New Task</button>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <select class="input" style="min-width: 180px;" [ngModel]="selectedTaskFilter()" (ngModelChange)="applySavedTaskFilter($event)">
+                    <option value="all">All Tasks</option>
+                    <option value="my-overdue">My Overdue</option>
+                    <option value="due-this-week">Due This Week</option>
+                    <option value="unassigned">Unassigned</option>
+                  </select>
+                  <button class="btn btn-primary" (click)="toggleCreateTaskForm()">+ New Task</button>
+                </div>
+              </div>
+
+              <div class="form-card" style="margin-bottom: 16px;">
+                <h3>Bulk Actions</h3>
+                <div class="form-row">
+                  <select class="input" [(ngModel)]="bulkStatus">
+                    <option value="">Bulk Status</option>
+                    <option value="todo">To Do</option>
+                    <option value="in-progress">In Progress</option>
+                    <option value="done">Done</option>
+                  </select>
+
+                  <select class="input" [(ngModel)]="bulkPriority">
+                    <option value="">Bulk Priority</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+
+                  <select class="input" [(ngModel)]="bulkAssignee">
+                    <option value="">Bulk Assignee</option>
+                    @for (emp of employees(); track emp.id) {
+                      <option [value]="emp.id">{{ emp.name || emp.email }}</option>
+                    }
+                  </select>
+                </div>
+                <div class="form-actions">
+                  <button class="btn btn-primary" (click)="applyBulkUpdate()" [disabled]="selectedTaskIds().length === 0">Apply to {{ selectedTaskIds().length }} Task(s)</button>
+                </div>
               </div>
 
               @if (showCreateTaskForm()) {
@@ -371,12 +454,14 @@ interface DashboardMessage {
 
                     <select formControlName="assignedTo" class="input">
                       <option value="">Assign To Employee</option>
-                      @if (employees().length > 0) {
-                        @for (emp of employees(); track emp.id) {
+                      @if (!taskForm.get('projectId')?.value) {
+                        <option value="" disabled>Select a project first</option>
+                      } @else if (getAssignableEmployeesForSelectedProject().length > 0) {
+                        @for (emp of getAssignableEmployeesForSelectedProject(); track emp.id) {
                           <option [value]="emp.id">{{ emp.name }} ({{ emp.email }})</option>
                         }
                       } @else {
-                        <option value="" disabled>No employees available</option>
+                        <option value="" disabled>No team members in this project</option>
                       }
                     </select>
 
@@ -394,8 +479,17 @@ interface DashboardMessage {
                       </select>
                     </div>
 
+                    <div class="form-row">
+                      <input type="number" placeholder="Effort Points" formControlName="effortPoints" class="input">
+                      <input type="number" placeholder="Estimated Hours" formControlName="estimatedHours" class="input">
+                    </div>
+
+                    <div class="form-row">
+                      <input type="text" placeholder="Reminder Offsets (minutes, comma separated)" formControlName="reminderOffsetsMinutes" class="input">
+                    </div>
+
                     <div class="form-actions">
-                      <button type="submit" class="btn btn-primary" [disabled]="!taskForm.valid || projects().length === 0 || employees().length === 0">Create Task</button>
+                      <button type="submit" class="btn btn-primary" [disabled]="!taskForm.valid || projects().length === 0 || getAssignableEmployeesForSelectedProject().length === 0">Create Task</button>
                       <button type="button" class="btn btn-secondary" (click)="toggleCreateTaskForm()">Cancel</button>
                     </div>
                   </form>
@@ -403,17 +497,23 @@ interface DashboardMessage {
               }
 
               <div class="tasks-list">
-                @if (tasks().length > 0) {
-                  @for (task of tasks(); track task.id) {
+                @if (displayedTasks().length > 0) {
+                  @for (task of displayedTasks(); track task.id) {
                     <div class="task-card">
                       <div class="task-header">
+                        <label style="display:flex; align-items:center; gap:6px; margin-right:8px;">
+                          <input type="checkbox" [checked]="isTaskSelected(task.id)" (change)="toggleTaskSelection(task.id)">
+                          Select
+                        </label>
                         <h3>{{ task.title }}</h3>
                         <span class="priority-badge" [class]="'priority-' + task.priority">{{ task.priority | uppercase }}</span>
                       </div>
                       <p>{{ task.description }}</p>
                       <div class="task-meta">
-                        <span>👤 Assigned to: {{ getEmployeeName(task.assignedTo) }}</span>
-                        <span>📅 Deadline: {{ task.deadline | date: 'MMM dd, yyyy' }}</span>
+                        <span>Assigned to: {{ getEmployeeName(task.assignedTo) }}</span>
+                        <span>Deadline: {{ task.deadline | date: 'MMM dd, yyyy' }}</span>
+                        <span>Score: {{ getTaskScore(task).toFixed(2) }}</span>
+                        <span>Hours: {{ task.actualHours || 0 }}/{{ task.estimatedHours || 0 }}</span>
                       </div>
                       <div class="task-status">
                         <span class="status-badge" [class]="'status-' + task.status">{{ task.status | titlecase }}</span>
@@ -424,6 +524,9 @@ interface DashboardMessage {
                       </div>
                       <div class="task-actions">
                         <button class="btn-small" (click)="editTask(task)">Edit</button>
+                        <button class="btn-small" (click)="openTaskActivity(task.id)">Activity</button>
+                        <button class="btn-small" (click)="setTaskRemindersPrompt(task)">Reminders</button>
+                        <button class="btn-small" (click)="logOneHour(task.id)">+1h</button>
                         <button class="btn-small" (click)="deleteTask(task.id)">Delete</button>
                       </div>
                     </div>
@@ -434,6 +537,26 @@ interface DashboardMessage {
                   </div>
                 }
               </div>
+
+              @if (selectedActivityTaskId()) {
+                <div class="form-card" style="margin-top: 16px;">
+                  <h3>Task Activity ({{ selectedActivityTaskId() }})</h3>
+                  @if (taskActivities().length > 0) {
+                    <div class="notifications-list">
+                      @for (entry of taskActivities(); track entry.id) {
+                        <div class="notification-item">
+                          <div class="notification-content">
+                            <p><strong>{{ entry.action }}</strong> by {{ entry.actorName }} ({{ entry.actorRole }})</p>
+                            <small>{{ entry.createdAt | date: 'MMM dd, yyyy HH:mm' }}</small>
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  } @else {
+                    <p>No activity yet for this task.</p>
+                  }
+                </div>
+              }
             </section>
           }
 
@@ -459,6 +582,7 @@ interface DashboardMessage {
                           <div class="conv-info">
                             <h4>{{ conv.employeeName }}</h4>
                             <p class="conv-preview">{{ conv.lastMessage }}</p>
+                            <small class="conv-time">{{ conv.lastMessageTime | date: 'MMM dd, HH:mm' }}</small>
                           </div>
                           @if (conv.unreadCount > 0) {
                             <span class="unread-badge">{{ conv.unreadCount }}</span>
@@ -476,7 +600,10 @@ interface DashboardMessage {
                 <div class="chat-main">
                   @if (selectedConversation()) {
                     <div class="chat-header">
-                      <h3>Chat with {{ selectedConversation()?.employeeName }}</h3>
+                      <div class="chat-title-wrap">
+                        <h3>Chat with {{ selectedConversation()?.employeeName }}</h3>
+                        <p class="chat-subtitle">Realtime conversation</p>
+                      </div>
                     </div>
                     <div class="messages-container">
                       @if (chatMessages().length > 0) {
@@ -484,7 +611,12 @@ interface DashboardMessage {
                           <div class="message" [class.sent]="msg.senderId === currentUserId()">
                             <div class="message-bubble">
                               <p>{{ msg.content }}</p>
-                              <small>{{ msg.timestamp | date: 'HH:mm' }}</small>
+                              <div class="message-meta">
+                                <small>{{ msg.timestamp | date: 'HH:mm' }}</small>
+                                @if (msg.senderId === currentUserId()) {
+                                  <span class="seen-state" [class.seen]="msg.isRead">{{ msg.isRead ? 'Seen' : 'Sent' }}</span>
+                                }
+                              </div>
                             </div>
                           </div>
                         }
@@ -500,7 +632,7 @@ interface DashboardMessage {
                              [(ngModel)]="chatMessage"
                              (keydown.enter)="sendChatMessage()"
                              class="chat-input">
-                      <button class="btn-icon" (click)="sendChatMessage()">📤</button>
+                      <button class="btn-icon chat-send-btn" (click)="sendChatMessage()"><span class="material-symbols-rounded app-icon">send</span></button>
                     </div>
                   } @else {
                     <div class="no-conversation">
@@ -516,12 +648,39 @@ interface DashboardMessage {
           @if (activeTab() === 'settings') {
             <section class="content">
               <h2>Settings</h2>
-              <div class="settings-card">
-                <h3>Admin Profile</h3>
-                <p><strong>Name:</strong> {{ userName() }}</p>
-                <p><strong>Email:</strong> {{ userEmail() }}</p>
-                <p><strong>Role:</strong> Administrator</p>
-                <p><strong>User ID:</strong> {{ currentUserId() }}</p>
+              <div class="settings-card admin-profile-card">
+                <div class="admin-profile-headline">
+                  <div class="admin-profile-identity">
+                    <img class="admin-profile-avatar" [src]="'https://ui-avatars.com/api/?name=' + userName()" alt="Admin Profile">
+                    <div>
+                      <h3>Admin Profile</h3>
+                      <p class="admin-profile-subtitle">Your account information and role details</p>
+                    </div>
+                  </div>
+                  <span class="meta-chip">
+                    <span class="material-symbols-rounded">verified_user</span>
+                    Administrator
+                  </span>
+                </div>
+
+                <div class="admin-profile-grid">
+                  <div class="admin-profile-row">
+                    <span class="material-symbols-rounded">badge</span>
+                    <p><strong>Name:</strong> {{ userName() }}</p>
+                  </div>
+                  <div class="admin-profile-row">
+                    <span class="material-symbols-rounded">mail</span>
+                    <p><strong>Email:</strong> {{ userEmail() }}</p>
+                  </div>
+                  <div class="admin-profile-row">
+                    <span class="material-symbols-rounded">admin_panel_settings</span>
+                    <p><strong>Role:</strong> Administrator</p>
+                  </div>
+                  <div class="admin-profile-row">
+                    <span class="material-symbols-rounded">fingerprint</span>
+                    <p><strong>User ID:</strong> {{ currentUserId() }}</p>
+                  </div>
+                </div>
               </div>
             </section>
           }
@@ -529,1000 +688,7 @@ interface DashboardMessage {
       }
     </div>
   `,
-  styles: `
-    .dashboard-container {
-      display: flex;
-      height: 100vh;
-      background: linear-gradient(120deg, #dbe6ff 0%, #eef2ff 40%, #f8fbff 100%);
-      font-family: 'Inter', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    }
-
-    .access-denied {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 20px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 20px;
-      text-align: center;
-    }
-
-    .denied-icon {
-      font-size: 80px;
-    }
-
-    .user-role-info {
-      font-size: 16px;
-      margin: 10px 0;
-      background: rgba(255, 255, 255, 0.2);
-      padding: 10px 20px;
-      border-radius: 8px;
-    }
-
-    .back-btn {
-      padding: 12px 24px;
-      background: white;
-      color: #667eea;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: 600;
-      transition: all 0.3s;
-    }
-
-    .back-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
-    }
-
-    /* Sidebar */
-    .sidebar {
-      width: 260px;
-      background: linear-gradient(180deg, #1f3b8f 0%, #3b5bcc 100%);
-      border-right: 1px solid rgba(255, 255, 255, 0.2);
-      display: flex;
-      flex-direction: column;
-      padding: 20px;
-      box-shadow: 0 12px 24px rgba(31, 59, 143, 0.28);
-    }
-
-    .sidebar-header {
-      margin-bottom: 30px;
-    }
-
-    .logo {
-      font-size: 22px;
-      font-weight: 700;
-      color: #ffffff;
-      margin: 0;
-    }
-
-    .sidebar-nav {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      flex: 1;
-    }
-
-    .nav-item {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px 16px;
-      color: #dbe7ff;
-      text-decoration: none;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.2s;
-      font-weight: 600;
-    }
-
-    .nav-item:hover,
-    .nav-item.active {
-      background: rgba(255, 255, 255, 0.2);
-      color: #ffffff;
-    }
-
-    .nav-item:hover {
-      text-decoration: none;
-    }
-
-    .nav-item .icon {
-      font-size: 18px;
-    }
-
-    .sidebar-footer {
-      padding-top: 20px;
-      border-top: 1px solid rgba(255, 255, 255, 0.25);
-    }
-
-    .logout-btn {
-      width: 100%;
-      padding: 12px;
-      background: #ef4444;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: 600;
-      transition: all 0.3s;
-    }
-
-    .logout-btn:hover {
-      background: #dc2626;
-      transform: translateY(-2px);
-    }
-
-    /* Main Content */
-    .main-content {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      background: rgba(255, 255, 255, 0.6);
-      position: relative;
-    }
-
-    /* Top Bar */
-    .top-bar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 20px 30px;
-      background: linear-gradient(120deg, #ffffff 0%, #edf3ff 100%);
-      border-bottom: 1px solid #e0e0e0;
-      box-shadow: 0 4px 12px rgba(34, 34, 59, 0.08);
-    }
-
-    .top-bar h1 {
-      margin: 0;
-      color: #1f2937;
-      font-size: 22px;
-      font-weight: 700;
-    }
-
-    .header-right {
-      display: flex;
-      align-items: center;
-      gap: 20px;
-    }
-
-    .notifications {
-      font-size: 20px;
-      cursor: pointer;
-      position: relative;
-    }
-
-    .notification-badge {
-      position: absolute;
-      top: -5px;
-      right: -5px;
-      background: #ef4444;
-      color: white;
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      font-size: 11px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .notifications-panel {
-      position: absolute;
-      top: 80px;
-      right: 30px;
-      width: 350px;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-      z-index: 1000;
-      border: 1px solid #e5e7eb;
-    }
-
-    .notifications-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 16px 20px;
-      border-bottom: 1px solid #e5e7eb;
-    }
-
-    .notifications-header h3 {
-      margin: 0;
-      font-size: 16px;
-      color: #1f2937;
-    }
-
-    .notifications-list {
-      max-height: 400px;
-      overflow-y: auto;
-    }
-
-    .notification-item {
-      display: flex;
-      align-items: flex-start;
-      padding: 12px 20px;
-      border-bottom: 1px solid #f3f4f6;
-      transition: all 0.3s;
-    }
-
-    .notification-item:hover {
-      background: #f9fafb;
-    }
-
-    .notification-item.unread {
-      background: #eef1ff;
-    }
-
-    .notification-icon {
-      font-size: 20px;
-      margin-right: 12px;
-      margin-top: 2px;
-    }
-
-    .notification-content {
-      flex: 1;
-    }
-
-    .notification-content p {
-      margin: 0 0 4px 0;
-      color: #1f2937;
-      font-size: 14px;
-    }
-
-    .notification-content small {
-      color: #9ca3af;
-      font-size: 12px;
-    }
-
-    .empty-notifications {
-      padding: 30px;
-      text-align: center;
-      color: #9ca3af;
-    }
-
-    .user-profile {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .user-profile img {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-    }
-
-    .user-name {
-      margin: 0;
-      font-weight: 600;
-      color: #1f2937;
-      font-size: 14px;
-    }
-
-    .user-role {
-      margin: 0;
-      color: #6b7280;
-      font-size: 12px;
-    }
-
-    /* Content Area */
-    .content {
-      flex: 1;
-      overflow-y: auto;
-      padding: 24px;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(239, 244, 255, 0.8) 100%);
-    }
-
-    .section {
-      margin-bottom: 40px;
-    }
-
-    .section h2 {
-      color: #1f2937;
-      margin-bottom: 20px;
-      font-size: 20px;
-    }
-
-    /* Stats Grid */
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 20px;
-      margin-bottom: 40px;
-    }
-
-    .stat-card {
-      background: linear-gradient(170deg, #ffffff 0%, #f3f7ff 100%);
-      padding: 24px;
-      border-radius: 12px;
-      border: 1px solid #cedbff;
-      box-shadow: 0 6px 16px rgba(74, 102, 204, 0.2);
-      transition: all 0.3s;
-    }
-
-    .stat-card:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 14px 24px rgba(74, 102, 204, 0.28);
-    }
-
-    .stat-header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-
-    .stat-icon {
-      font-size: 28px;
-    }
-
-    .stat-header h3 {
-      margin: 0;
-      color: #6b7280;
-      font-size: 14px;
-      font-weight: 500;
-    }
-
-    .stat-value {
-      margin: 0;
-      font-size: 32px;
-      font-weight: 700;
-      color: #1f2937;
-    }
-
-    .stat-label {
-      margin: 8px 0 0;
-      color: #9ca3af;
-      font-size: 13px;
-    }
-
-    /* Progress */
-    .project-progress-list {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .progress-item {
-      background: white;
-      padding: 20px;
-      border-radius: 12px;
-      border: 1px solid #e5e7eb;
-      box-shadow: 0 2px 8px rgba(34, 34, 59, 0.07);
-    }
-
-    .progress-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
-    }
-
-    .progress-header h3 {
-      margin: 0;
-      color: #1f2937;
-      font-size: 16px;
-    }
-
-    .progress-value {
-      font-weight: 700;
-      color: #667eea;
-    }
-
-    .progress-bar-container {
-      width: 100%;
-      height: 10px;
-      background: #e5e7eb;
-      border-radius: 999px;
-      overflow: hidden;
-      margin-bottom: 12px;
-    }
-
-    .progress-bar {
-      height: 100%;
-      background: linear-gradient(90deg, #667eea 0%, #5a6fd8 100%);
-      transition: width 0.3s ease;
-    }
-
-    .progress-meta {
-      display: flex;
-      justify-content: space-between;
-      color: #6b7280;
-      font-size: 13px;
-    }
-
-    /* Projects Grid */
-    .section-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 30px;
-    }
-
-    .section-header h2 {
-      margin: 0;
-    }
-
-    .btn {
-      padding: 10px 20px;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: 600;
-      transition: all 0.3s;
-      font-size: 14px;
-    }
-
-    .btn-primary {
-      background: linear-gradient(120deg, #2f52d8 0%, #5f7fff 100%);
-      color: white;
-    }
-
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
-    }
-
-    .btn-secondary {
-      background: #e5e7eb;
-      color: #1f2937;
-    }
-
-    .btn-secondary:hover {
-      background: #d1d5db;
-    }
-
-    .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      transform: none !important;
-    }
-
-    .btn-icon {
-      width: 36px;
-      height: 36px;
-      border: none;
-      background: #f3f4f6;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 18px;
-      transition: all 0.3s;
-    }
-
-    .btn-icon:hover {
-      background: #e5e7eb;
-    }
-
-    /* Form Styles */
-    .form-card {
-      background: white;
-      padding: 24px;
-      border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-      margin-bottom: 30px;
-    }
-
-    .form-card h3 {
-      margin: 0 0 20px;
-      color: #1f2937;
-    }
-
-    .form {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .input, .textarea {
-      padding: 12px;
-      border: 1px solid #d1d5db;
-      border-radius: 8px;
-      font-family: inherit;
-      font-size: 14px;
-      transition: all 0.3s;
-    }
-
-    .input:focus, .textarea:focus {
-      outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }
-
-    .textarea {
-      min-height: 100px;
-      resize: vertical;
-    }
-
-    .date-row, .form-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-    }
-
-    .date-row label, .form-row label {
-      display: block;
-      margin-bottom: 8px;
-      color: #6b7280;
-      font-size: 14px;
-      font-weight: 500;
-    }
-
-    .form-actions {
-      display: flex;
-      gap: 12px;
-      margin-top: 10px;
-    }
-
-    .error {
-      color: #ef4444;
-      font-size: 12px;
-      margin-top: 4px;
-      display: block;
-    }
-
-    /* Projects & Tasks Grid */
-    .projects-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 24px;
-    }
-
-    .project-card, .task-card {
-      background: white;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-      transition: all 0.3s;
-    }
-
-    .project-card:hover, .task-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
-    }
-
-    .project-header, .task-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 12px;
-    }
-
-    .project-header h3, .task-header h3 {
-      margin: 0;
-      color: #1f2937;
-      font-size: 16px;
-    }
-
-    .project-description {
-      color: #6b7280;
-      font-size: 14px;
-      margin-bottom: 16px;
-    }
-
-    .project-meta {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      margin-bottom: 12px;
-      font-size: 13px;
-      flex-wrap: wrap;
-    }
-
-    .badge {
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-    }
-
-    .status-planning {
-      background: #dbeafe;
-      color: #0369a1;
-    }
-
-    .status-in-progress {
-      background: #fed7aa;
-      color: #b45309;
-    }
-
-    .status-on-hold {
-      background: #f3f4f6;
-      color: #6b7280;
-    }
-
-    .status-completed {
-      background: #dcfce7;
-      color: #166534;
-    }
-
-    .progress-text {
-      color: #667eea;
-      font-weight: 600;
-      margin: 12px 0 8px 0;
-    }
-
-    .project-dates {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 12px;
-      font-size: 12px;
-      color: #6b7280;
-    }
-
-    /* Task Styles */
-    .tasks-list {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .priority-badge {
-      padding: 4px 12px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 700;
-    }
-
-    .priority-low {
-      background: #dbeafe;
-      color: #0369a1;
-    }
-
-    .priority-medium {
-      background: #fed7aa;
-      color: #b45309;
-    }
-
-    .priority-high {
-      background: #fed7aa;
-      color: #ea580c;
-    }
-
-    .priority-urgent {
-      background: #fecaca;
-      color: #991b1b;
-    }
-
-    .task-meta {
-      display: flex;
-      gap: 16px;
-      color: #6b7280;
-      font-size: 13px;
-      margin: 12px 0;
-    }
-
-    .task-status {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      margin-bottom: 12px;
-      font-size: 13px;
-    }
-
-    .status-badge {
-      padding: 4px 12px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 600;
-    }
-
-    .status-todo {
-      background: #f3f4f6;
-      color: #6b7280;
-    }
-
-    .status-in-progress {
-      background: #fef3c7;
-      color: #92400e;
-    }
-
-    .status-done {
-      background: #dcfce7;
-      color: #166534;
-    }
-
-    .task-actions {
-      display: flex;
-      gap: 8px;
-      margin-top: 16px;
-    }
-
-    .btn-small {
-      padding: 8px 16px;
-      background: #f3f4f6;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 600;
-      transition: all 0.3s;
-    }
-
-    .btn-small:hover {
-      background: #e5e7eb;
-    }
-
-    .project-actions {
-      display: flex;
-      gap: 8px;
-    }
-
-    /* Chat Styles */
-    .chat-container {
-      display: flex;
-      gap: 20px;
-      height: 600px;
-      background: white;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-    }
-
-    .chat-sidebar {
-      width: 300px;
-      border-right: 1px solid #e5e7eb;
-      padding: 20px;
-      overflow-y: auto;
-    }
-
-    .chat-sidebar h3 {
-      margin: 0 0 16px;
-      color: #1f2937;
-    }
-
-    .conversations-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .conversation-item {
-      display: flex;
-      gap: 12px;
-      padding: 12px;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.3s;
-      position: relative;
-    }
-
-    .conversation-item:hover {
-      background: #f9fafb;
-    }
-
-    .conversation-item.active {
-      background: #f0f4ff;
-    }
-
-    .conv-avatar {
-      flex-shrink: 0;
-    }
-
-    .conv-avatar img {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-    }
-
-    .conv-info {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .conv-info h4 {
-      margin: 0;
-      color: #1f2937;
-      font-size: 14px;
-      font-weight: 600;
-    }
-
-    .conv-preview {
-      margin: 4px 0 0;
-      color: #9ca3af;
-      font-size: 12px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .unread-badge {
-      position: absolute;
-      right: 12px;
-      top: 50%;
-      transform: translateY(-50%);
-      background: #667eea;
-      color: white;
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 11px;
-      font-weight: 700;
-    }
-
-    .chat-main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      padding: 20px;
-    }
-
-    .chat-header {
-      padding-bottom: 16px;
-      border-bottom: 1px solid #e5e7eb;
-      margin-bottom: 16px;
-    }
-
-    .chat-header h3 {
-      margin: 0;
-      color: #1f2937;
-    }
-
-    .messages-container {
-      flex: 1;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-
-    .message {
-      display: flex;
-      justify-content: flex-start;
-    }
-
-    .message.sent {
-      justify-content: flex-end;
-    }
-
-    .message-bubble {
-      max-width: 70%;
-      padding: 12px 16px;
-      border-radius: 12px;
-      background: #f3f4f6;
-      color: #1f2937;
-    }
-
-    .message.sent .message-bubble {
-      background: #667eea;
-      color: white;
-    }
-
-    .message-bubble p {
-      margin: 0;
-      font-size: 14px;
-    }
-
-    .message-bubble small {
-      display: block;
-      margin-top: 4px;
-      opacity: 0.7;
-      font-size: 12px;
-    }
-
-    .chat-input-area {
-      display: flex;
-      gap: 12px;
-      margin-top: auto;
-    }
-
-    .chat-input {
-      flex: 1;
-      padding: 12px;
-      border: 1px solid #d1d5db;
-      border-radius: 8px;
-      font-family: inherit;
-      font-size: 14px;
-    }
-
-    .no-conversation {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      color: #9ca3af;
-    }
-
-    .no-messages {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      color: #9ca3af;
-      font-style: italic;
-    }
-
-    .empty-conversations {
-      text-align: center;
-      padding: 20px;
-      color: #9ca3af;
-    }
-
-    /* Settings */
-    .settings-card {
-      background: white;
-      padding: 24px;
-      border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-    }
-
-    .settings-card h3 {
-      margin: 0 0 20px;
-      color: #1f2937;
-    }
-
-    .settings-card p {
-      margin: 12px 0;
-      color: #4b5563;
-    }
-
-    /* Empty States */
-    .empty-state {
-      grid-column: 1 / -1;
-      text-align: center;
-      padding: 40px;
-      color: #9ca3af;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-    }
-
-    @media (max-width: 768px) {
-      .dashboard-container {
-        flex-direction: column;
-      }
-
-      .sidebar {
-        width: 100%;
-        flex-direction: row;
-        align-items: center;
-        border-right: none;
-        border-bottom: 1px solid #e5e7eb;
-      }
-
-      .sidebar-nav {
-        flex-direction: row;
-        flex: 1;
-        margin: 0 30px;
-      }
-
-      .projects-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
-
-      .chat-container {
-        flex-direction: column;
-        height: auto;
-      }
-
-      .chat-sidebar {
-        width: 100%;
-        max-height: 250px;
-      }
-
-      .date-row, .form-row {
-        grid-template-columns: 1fr;
-      }
-
-      .notifications-panel {
-        right: 10px;
-        left: 10px;
-        width: auto;
-      }
-    }
-  `,
+  styles: ``,
 })
 export class DashboardComponent implements OnInit {
   private authService = inject(AuthService);
@@ -1544,10 +710,20 @@ export class DashboardComponent implements OnInit {
 
   projects = signal<Project[]>([]);
   tasks = signal<Task[]>([]);
+  displayedTasks = signal<Task[]>([]);
   employees = signal<User[]>([]);
   conversations = signal<DashboardConversation[]>([]);
   chatMessages = signal<DashboardMessage[]>([]);
   notifications = signal<Notification[]>([]);
+  taskActivities = signal<TaskActivityEntry[]>([]);
+  selectedActivityTaskId = signal<string | null>(null);
+  selectedTaskIds = signal<string[]>([]);
+  projectTeamSelection = signal<string[]>([]);
+
+  selectedTaskFilter = signal<'all' | 'my-overdue' | 'due-this-week' | 'unassigned'>('all');
+  bulkStatus = '';
+  bulkPriority = '';
+  bulkAssignee = '';
 
   dashboardStats = signal<AdminDashboardStats | null>(null);
 
@@ -1564,13 +740,13 @@ export class DashboardComponent implements OnInit {
   taskForm!: FormGroup;
 
   ngOnInit() {
-    console.log('🚀 Admin Dashboard initialized');
+    console.log('Admin Dashboard initialized');
     const user = this.authService.getCurrentUser();
     if (user) {
       this.currentUserId.set(user.uid);
       this.userName.set(user.displayName || user.email || 'Admin');
       this.userEmail.set(user.email || '');
-      console.log('👤 User loaded:', user.email, 'UID:', user.uid);
+      console.log('User loaded:', user.email, 'UID:', user.uid);
       this.checkUserRole();
     } else {
       console.warn('No user found, redirecting to signin');
@@ -1590,7 +766,7 @@ export class DashboardComponent implements OnInit {
       const role = await this.authService.getUserRole(userId);
       this.isAdmin.set(role === 'admin');
       this.userRole.set(role);
-      console.log('🎯 User role:', role, 'Is admin:', this.isAdmin());
+      console.log('User role:', role, 'Is admin:', this.isAdmin());
 
       if (this.isAdmin()) {
         this.loadAdminDashboard();
@@ -1606,7 +782,7 @@ export class DashboardComponent implements OnInit {
 
   loadAdminDashboard() {
     const adminId = this.currentUserId();
-    console.log('📊 Loading admin dashboard for:', adminId);
+    console.log('Loading admin dashboard for:', adminId);
 
     if (!adminId) {
       console.error('❌ No admin ID available');
@@ -1633,7 +809,7 @@ export class DashboardComponent implements OnInit {
 
   loadAdminProjects() {
     const adminId = this.currentUserId();
-    console.log('🔄 Loading projects for admin:', adminId);
+    console.log('Loading projects for admin:', adminId);
     
     if (!adminId) {
       console.error('❌ No admin ID found');
@@ -1647,7 +823,7 @@ export class DashboardComponent implements OnInit {
           next: (projects) => {
             console.log('📥 Projects loaded successfully:', projects.length);
             if (projects.length > 0) {
-              console.log('📊 Sample project:', {
+              console.log('Sample project:', {
                 id: projects[0].id,
                 name: projects[0].name,
                 status: projects[0].status
@@ -1665,7 +841,7 @@ export class DashboardComponent implements OnInit {
   }
 
   loadTasks() {
-    console.log('📋 Loading tasks...');
+    console.log('Loading tasks...');
     const tasksRef = collection(this.firestore, 'tasks');
     getDocs(tasksRef)
       .then((querySnapshot) => {
@@ -1689,12 +865,18 @@ export class DashboardComponent implements OnInit {
           };
           tasks.push(task);
         });
-        console.log('📋 Tasks loaded:', tasks.length);
+        console.log('Tasks loaded:', tasks.length);
         this.tasks.set(tasks);
+        this.refreshDisplayedTasks();
+        this.selectedTaskIds.set([]);
 
         this.taskService
           .checkAndNotifyOverdueTasksForAdmin(this.currentUserId())
           .catch((error: any) => console.error('❌ Error checking overdue notifications:', error));
+
+        this.taskService
+          .processTaskRemindersForWindow(120)
+          .catch((error: any) => console.error('❌ Error processing task reminders:', error));
       })
       .catch((error) => {
         console.error('❌ Error loading tasks:', error);
@@ -1702,7 +884,7 @@ export class DashboardComponent implements OnInit {
   }
 
   loadEmployees() {
-    console.log('👥 Loading employees...');
+    console.log('Loading employees...');
     const usersRef = collection(this.firestore, 'users');
     const q = query(usersRef, where('role', '==', 'employee'));
     
@@ -1720,7 +902,7 @@ export class DashboardComponent implements OnInit {
           };
           employees.push(employee);
         });
-        console.log('👥 Employees loaded:', employees.length);
+        console.log('Employees loaded:', employees.length);
         this.employees.set(employees);
       })
       .catch((error) => {
@@ -1729,10 +911,10 @@ export class DashboardComponent implements OnInit {
   }
 
   loadDashboardStats(adminId: string) {
-    console.log('📈 Loading dashboard stats...');
+    console.log('Loading dashboard stats...');
     this.projectService.getAdminDashboardStats(adminId)
       .then((stats) => {
-        console.log('📈 Dashboard stats loaded:', stats);
+        console.log('Dashboard stats loaded:', stats);
         this.dashboardStats.set(stats);
       })
       .catch((error) => {
@@ -1743,7 +925,7 @@ export class DashboardComponent implements OnInit {
   // ULTIMATE FIX: Use getDocs() instead of collectionData() to avoid Firestore reference issues
   // Change this in loadConversationsUltimate method:
 loadConversationsUltimate(adminId: string) {
-  console.log('💬 Loading conversations using getDocs() for admin:', adminId);
+  console.log('Loading conversations using getDocs() for admin:', adminId);
   
   if (!adminId) {
     console.error('❌ No admin ID provided');
@@ -1780,7 +962,7 @@ loadConversationsUltimate(adminId: string) {
           };
         });
         
-        console.log('✅ Conversations loaded with getDocs():', conversations.length);
+        console.log('Conversations loaded with getDocs():', conversations.length);
         this.conversations.set(conversations);
         
         // Auto-select first conversation if none selected
@@ -1813,7 +995,7 @@ loadConversationsUltimate(adminId: string) {
       event.stopPropagation();
     }
     
-    console.log('🎯 Selecting conversation with:', conv.employeeName);
+    console.log('Selecting conversation with:', conv.employeeName);
     
     const user = this.authService.getCurrentUser();
     if (!user) {
@@ -1829,62 +1011,23 @@ loadConversationsUltimate(adminId: string) {
 
   loadMessagesUltimate(userId1: string, userId2: string) {
     console.log('📨 Loading messages between', userId1, 'and', userId2);
-    
-    try {
-      const messagesRef = collection(this.firestore, 'messages');
-      
-      // Generate conversation ID both ways
-      const conversationId1 = `${userId1}_${userId2}`;
-      const conversationId2 = `${userId2}_${userId1}`;
-      
-      const q = query(
-        messagesRef,
-        where('conversationId', 'in', [conversationId1, conversationId2]),
-        orderBy('timestamp', 'asc')
-      );
 
-      // Use getDocs() instead of collectionData()
-      from(getDocs(q))
-        .pipe(
-          takeUntilDestroyed(this.destroyRef),
-          catchError((error) => {
-            console.error('❌ Error loading messages with getDocs:', error);
-            return of({ docs: [] } as any);
-          })
-        )
-        .subscribe({
-          next: (snapshot) => {
-            const messages: DashboardMessage[] = snapshot.docs.map((doc: QueryDocumentSnapshot) => {
-              const data = doc.data();
-              return {
-                id: doc.id,
-                senderId: data['senderId'] || '',
-                senderName: data['senderName'] || '',
-                senderRole: data['senderRole'] || 'employee',
-                content: data['content'] || '',
-                timestamp: data['timestamp']?.toDate ? data['timestamp'].toDate() : data['timestamp'],
-                isRead: data['isRead'] || false,
-                conversationId: data['conversationId'] || ''
-              };
-            });
-            
-            console.log('✅ Messages loaded with getDocs():', messages.length);
-            this.chatMessages.set(messages);
-            
-            // Auto-scroll to bottom
-            setTimeout(() => {
-              this.scrollToBottom();
-            }, 100);
-          },
-          error: (error) => {
-            console.error('❌ Subscription error in loadMessagesUltimate:', error);
-            this.chatMessages.set([]);
-          }
-        });
-    } catch (error) {
-      console.error('❌ Exception in loadMessagesUltimate:', error);
-      this.chatMessages.set([]);
-    }
+    this.chatService.getConversationMessages(userId1, userId2)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (messages) => {
+          console.log('Messages loaded (realtime):', messages.length);
+          this.chatMessages.set(messages as DashboardMessage[]);
+          void this.markConversationSeen(userId1, userId2);
+          setTimeout(() => {
+            this.scrollToBottom();
+          }, 100);
+        },
+        error: (error) => {
+          console.error('❌ Subscription error in loadMessagesUltimate:', error);
+          this.chatMessages.set([]);
+        }
+      });
   }
 
   initializeForms() {
@@ -1894,6 +1037,7 @@ loadConversationsUltimate(adminId: string) {
       startDate: ['', Validators.required],
       endDate: ['', Validators.required],
       status: ['planning', Validators.required],
+      teamMembers: [[]],
     });
 
     this.taskForm = this.fb.group({
@@ -1903,7 +1047,16 @@ loadConversationsUltimate(adminId: string) {
       description: ['', Validators.required],
       deadline: ['', Validators.required],
       priority: ['medium', Validators.required],
+      effortPoints: [0],
+      estimatedHours: [0],
+      reminderOffsetsMinutes: [''],
     });
+
+    this.taskForm.get('projectId')?.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((projectId) => {
+        this.onTaskProjectChanged(projectId as string);
+      });
   }
 
   onTabChange(tab: 'dashboard' | 'projects' | 'tasks' | 'chat' | 'settings', event?: Event) {
@@ -1997,7 +1150,7 @@ loadConversationsUltimate(adminId: string) {
       const adminId = this.currentUserId();
       const formValue = this.projectForm.value;
       
-      console.log('📋 Form values:', formValue);
+      console.log('Form values:', formValue);
       
       const projectData = {
         name: formValue.name,
@@ -2006,21 +1159,23 @@ loadConversationsUltimate(adminId: string) {
         endDate: formValue.endDate,
         status: formValue.status || 'planning',
         adminId: adminId,
-        teamMembers: []
+        teamMembers: this.projectTeamSelection()
       };
 
-      console.log('📤 Creating project with data:', projectData);
+      console.log('Creating project with data:', projectData);
 
       this.projectService.createProject(adminId, projectData)
         .then((projectId) => {
-          console.log('✅ Project created with ID:', projectId);
+          console.log('Project created with ID:', projectId);
           this.projectForm.reset();
+          this.projectTeamSelection.set([]);
+          this.projectForm.patchValue({ status: 'planning', teamMembers: [] });
           this.showCreateProjectForm.set(false);
           this.loadAdminProjects();
         })
         .catch((error) => {
           console.error('❌ Error creating project:', error);
-          alert('Error creating project: ' + error.message);
+          void this.showAlert('Error creating project: ' + error.message, 'error', 'Project Error');
         });
     } else {
       console.warn('Form is invalid');
@@ -2030,7 +1185,7 @@ loadConversationsUltimate(adminId: string) {
 
   async createTestProject() {
     const adminId = this.currentUserId();
-    console.log('🧪 Creating test project...');
+    console.log('Creating test project...');
     
     const testProject = {
       name: 'Test Project ' + new Date().getTime(),
@@ -2044,34 +1199,54 @@ loadConversationsUltimate(adminId: string) {
 
     try {
       const projectId = await this.projectService.createProject(adminId, testProject);
-      console.log('✅ Test project created with ID:', projectId);
-      alert('Test project created successfully!');
+      console.log('Test project created with ID:', projectId);
+      await this.showAlert('Test project created successfully!', 'success', 'Project Created');
       this.loadAdminProjects();
     } catch (error: any) {
       console.error('❌ Failed to create test project:', error);
-      alert('Error: ' + error.message);
+      await this.showAlert('Error: ' + error.message, 'error', 'Project Error');
     }
   }
 
   createTask() {
     if (this.taskForm.valid) {
       const adminId = this.currentUserId();
-      const { projectId, assignedTo, ...taskData } = this.taskForm.value;
+      const {
+        projectId,
+        assignedTo,
+        reminderOffsetsMinutes,
+        effortPoints,
+        estimatedHours,
+        ...taskData
+      } = this.taskForm.value;
 
-      console.log('📝 Creating task for project:', projectId);
+      console.log('Creating task for project:', projectId);
+
+      const parsedReminderOffsets = this.parseNumberList(reminderOffsetsMinutes);
 
       this.taskService.createTask(projectId, adminId, assignedTo, {
         ...taskData,
         assignedBy: adminId,
         status: 'todo',
         completionPercentage: 0,
+        effortPoints: Number(effortPoints || 0),
+        estimatedHours: Number(estimatedHours || 0),
+        actualHours: 0,
+        reminderOffsetsMinutes: parsedReminderOffsets,
       }).then(() => {
-        console.log('✅ Task created successfully');
+        console.log('Task created successfully');
         this.taskForm.reset();
+        this.taskForm.patchValue({
+          priority: 'medium',
+          effortPoints: 0,
+          estimatedHours: 0,
+        });
         this.showCreateTaskForm.set(false);
+        this.loadAdminProjects();
+        this.loadTasks();
       }).catch((error) => {
         console.error('❌ Error creating task:', error);
-        alert('Error creating task: ' + error.message);
+        void this.showAlert('Error creating task: ' + error.message, 'error', 'Task Error');
       });
     } else {
       console.warn('Task form is invalid');
@@ -2079,40 +1254,337 @@ loadConversationsUltimate(adminId: string) {
     }
   }
 
-  deleteProject(projectId: string) {
-    if (confirm('Are you sure you want to delete this project?')) {
-      console.log('🗑️ Deleting project:', projectId);
-      this.projectService.deleteProject(projectId)
+  async deleteProject(project: Project) {
+    const taskCount = project.taskCount || 0;
+    const confirmed = await this.showConfirm(
+      `Delete "${project.name}"? This will also delete ${taskCount} related task(s).`,
+      'Delete Project'
+    );
+
+    if (confirmed) {
+      console.log('Deleting project:', project.id);
+      this.projectService.deleteProject(project.id)
         .then(() => {
-          console.log('✅ Project deleted');
+          console.log('Project deleted');
           this.loadAdminProjects();
+          this.loadTasks();
+          this.loadDashboardStats(this.currentUserId());
         })
         .catch((error) => {
           console.error('❌ Error deleting project:', error);
-          alert('Error deleting project: ' + error.message);
+          void this.showAlert('Error deleting project: ' + error.message, 'error', 'Delete Failed');
         });
     }
   }
 
-  deleteTask(taskId: string) {
-    if (confirm('Are you sure?')) {
-      this.taskService.deleteTask(taskId);
+  async changeProjectStatus(project: Project, event: Event) {
+    const selectElement = event.target as HTMLSelectElement | null;
+    const nextStatus = (selectElement?.value || project.status) as Project['status'];
+
+    if (nextStatus === project.status) {
+      return;
+    }
+
+    try {
+      await this.projectService.updateProject(project.id, { status: nextStatus });
+      this.loadAdminProjects();
+      this.loadDashboardStats(this.currentUserId());
+      await this.showAlert(`Project status updated to ${nextStatus}.`, 'success', 'Status Updated');
+    } catch (error: any) {
+      console.error('❌ Error updating project status:', error);
+      if (selectElement) {
+        selectElement.value = project.status;
+      }
+      await this.showAlert('Failed to update project status: ' + error.message, 'error', 'Update Failed');
     }
   }
 
-  editProject(project: Project) {
-    console.log('Edit project:', project);
-    alert('Edit functionality coming soon!');
+  async deleteTask(taskId: string) {
+    if (await this.showConfirm('Are you sure you want to delete this task?', 'Delete Task')) {
+      this.taskService.deleteTask(taskId)
+        .then(() => {
+          this.loadAdminProjects();
+          this.loadTasks();
+        })
+        .catch((error) => {
+          console.error('❌ Error deleting task:', error);
+          void this.showAlert('Error deleting task: ' + error.message, 'error', 'Delete Failed');
+        });
+    }
+  }
+
+  async editProject(project: Project) {
+    const employees = this.employees();
+
+    if (!employees.length) {
+      await this.showAlert('No employees available to assign.', 'info', 'No Team Members');
+      return;
+    }
+
+    const currentTeam = new Set(project.teamMembers || []);
+    const optionsText = employees
+      .map((employee, index) => {
+        const marker = currentTeam.has(employee.id) ? '✓' : ' ';
+        const label = employee.name || employee.email || employee.id;
+        return `${index + 1}. [${marker}] ${label}`;
+      })
+      .join('\n');
+
+    const currentSelectionIndices = employees
+      .map((employee, index) => currentTeam.has(employee.id) ? String(index + 1) : null)
+      .filter(Boolean)
+      .join(',');
+
+    const input = await this.showTextInput(
+      `Edit team members for "${project.name}"`,
+      `Choose employee numbers (comma separated):\n${optionsText}`,
+      currentSelectionIndices,
+      'textarea'
+    );
+
+    if (input === null) {
+      return;
+    }
+
+    const selectedTeamMembers = this.parseEmployeeSelectionInput(input, employees);
+
+    this.projectService.updateProject(project.id, { teamMembers: selectedTeamMembers })
+      .then(() => {
+        void this.showAlert('Project team updated successfully.', 'success', 'Team Updated');
+        this.loadAdminProjects();
+        this.onTaskProjectChanged(this.taskForm.get('projectId')?.value || '');
+      })
+      .catch((error) => {
+        console.error('❌ Error updating project team:', error);
+        void this.showAlert('Error updating project team: ' + error.message, 'error', 'Update Failed');
+      });
   }
 
   editTask(task: Task) {
     console.log('Edit task:', task);
-    alert('Edit functionality coming soon!');
+    void this.showAlert('Edit functionality coming soon!', 'info', 'Not Yet Available');
+  }
+
+  toggleTaskSelection(taskId: string) {
+    const selected = new Set(this.selectedTaskIds());
+    if (selected.has(taskId)) {
+      selected.delete(taskId);
+    } else {
+      selected.add(taskId);
+    }
+    this.selectedTaskIds.set(Array.from(selected));
+  }
+
+  isTaskSelected(taskId: string): boolean {
+    return this.selectedTaskIds().includes(taskId);
+  }
+
+  applySavedTaskFilter(filterKey: 'all' | 'my-overdue' | 'due-this-week' | 'unassigned') {
+    this.selectedTaskFilter.set(filterKey);
+    this.refreshDisplayedTasks();
+  }
+
+  private refreshDisplayedTasks() {
+    const filter = this.selectedTaskFilter();
+    const allTasks = this.tasks();
+
+    if (filter === 'all') {
+      this.displayedTasks.set(allTasks);
+      return;
+    }
+
+    const now = new Date();
+    const weekEnd = new Date(now);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+
+    const filtered = allTasks.filter(task => {
+      const deadline = new Date(task.deadline);
+      switch (filter) {
+        case 'my-overdue':
+          return task.status !== 'done' && deadline < now;
+        case 'due-this-week':
+          return deadline >= now && deadline <= weekEnd;
+        case 'unassigned':
+          return !task.assignedTo || task.assignedTo.trim().length === 0;
+        default:
+          return true;
+      }
+    });
+
+    this.displayedTasks.set(filtered);
+  }
+
+  async applyBulkUpdate() {
+    const selectedIds = this.selectedTaskIds();
+    if (!selectedIds.length) {
+      return;
+    }
+
+    const updates: any = {};
+    if (this.bulkStatus) {
+      updates.status = this.bulkStatus;
+    }
+    if (this.bulkPriority) {
+      updates.priority = this.bulkPriority;
+    }
+    if (this.bulkAssignee) {
+      updates.assignedTo = this.bulkAssignee;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      await this.showAlert('Select at least one bulk field to update.', 'info', 'Bulk Update');
+      return;
+    }
+
+    try {
+      await this.taskService.bulkUpdateTasks(
+        selectedIds,
+        updates,
+        this.currentUserId(),
+        this.userName(),
+        'admin'
+      );
+
+      this.selectedTaskIds.set([]);
+      this.bulkStatus = '';
+      this.bulkPriority = '';
+      this.bulkAssignee = '';
+      this.loadAdminProjects();
+      this.loadTasks();
+    } catch (error: any) {
+      console.error('❌ Error applying bulk update:', error);
+      await this.showAlert('Bulk update failed: ' + error.message, 'error', 'Bulk Update Failed');
+    }
+  }
+
+  async setTaskRemindersPrompt(task: Task) {
+    const currentValue = (task.reminderOffsetsMinutes || []).join(', ');
+    const input = await this.showTextInput('Reminders', 'Enter reminder offsets in minutes (comma separated):', currentValue);
+    if (input === null) {
+      return;
+    }
+
+    const reminderOffsets = this.parseNumberList(input);
+    try {
+      await this.taskService.setTaskReminders(
+        task.id,
+        reminderOffsets,
+        this.currentUserId(),
+        this.userName(),
+        'admin'
+      );
+      this.loadTasks();
+    } catch (error: any) {
+      console.error('❌ Error updating reminders:', error);
+      await this.showAlert('Failed to update reminders: ' + error.message, 'error', 'Reminder Update Failed');
+    }
+  }
+
+  async logOneHour(taskId: string) {
+    try {
+      await this.taskService.addActualHours(taskId, 1);
+      this.loadTasks();
+    } catch (error: any) {
+      console.error('❌ Error logging one hour:', error);
+      await this.showAlert('Failed to log time: ' + error.message, 'error', 'Time Log Failed');
+    }
+  }
+
+  openTaskActivity(taskId: string) {
+    this.selectedActivityTaskId.set(taskId);
+    this.taskService.getTaskActivity(taskId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (entries) => this.taskActivities.set(entries),
+        error: (error) => {
+          console.error('❌ Error loading task activity:', error);
+          this.taskActivities.set([]);
+        }
+      });
+  }
+
+  getTaskScore(task: Task): number {
+    return this.taskService.getTaskPriorityScore(task);
+  }
+
+  private parseNumberList(value: string): number[] {
+    if (!value || typeof value !== 'string') {
+      return [];
+    }
+
+    return value
+      .split(',')
+      .map(item => Number(item.trim()))
+      .filter(item => !Number.isNaN(item) && item > 0)
+      .map(item => Math.round(item));
+  }
+
+  private parseEmployeeSelectionInput(input: string, employees: User[]): string[] {
+    const selectedIndices = input
+      .split(',')
+      .map((item) => Number(item.trim()))
+      .filter((item) => Number.isInteger(item) && item > 0 && item <= employees.length);
+
+    const selectedIds = selectedIndices.map((index) => employees[index - 1].id);
+    return Array.from(new Set(selectedIds));
+  }
+
+  private async showAlert(message: string, icon: 'success' | 'error' | 'info' = 'info', title = 'Notification') {
+    await Swal.fire({
+      title,
+      text: message,
+      icon,
+      confirmButtonText: 'OK'
+    });
+  }
+
+  private async showConfirm(message: string, title = 'Please Confirm'): Promise<boolean> {
+    const result = await Swal.fire({
+      title,
+      text: message,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Confirm',
+      cancelButtonText: 'Cancel'
+    });
+    return result.isConfirmed;
+  }
+
+  private async showTextInput(
+    title: string,
+    label: string,
+    currentValue = '',
+    inputType: 'text' | 'textarea' = 'text'
+  ): Promise<string | null> {
+    const result = await Swal.fire({
+      title,
+      input: inputType,
+      inputLabel: label,
+      inputValue: currentValue,
+      showCancelButton: true,
+      confirmButtonText: 'Save',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (!result.isConfirmed) {
+      return null;
+    }
+
+    return String(result.value ?? '').trim();
   }
 
   // Keep backward compatibility
   selectConversation(conv: DashboardConversation, event?: Event) {
     this.selectConversationUltimate(conv, event);
+  }
+
+  private async markConversationSeen(userId1: string, userId2: string) {
+    try {
+      await this.chatService.markConversationAsRead(userId1, userId2, this.currentUserId());
+      this.loadConversationsUltimate(this.currentUserId());
+    } catch (error) {
+      console.error('❌ Error marking conversation as seen:', error);
+    }
   }
 
   loadConversations(adminId: string) {
@@ -2136,43 +1608,83 @@ loadConversationsUltimate(adminId: string) {
       return;
     }
     
-    if (!this.chatMessage.trim() || !this.selectedConversation()) {
+    const messageContent = this.chatMessage.trim();
+    if (!messageContent || !this.selectedConversation()) {
       return;
     }
     
-    console.log('📤 Sending message:', this.chatMessage);
+    console.log('Sending message:', this.chatMessage);
     
     try {
+      this.chatMessage = '';
+
       // Use ChatService to send message
       await this.chatService.sendMessage(
         this.currentUserId(),
         this.userName(),
         'admin',
         this.selectedConversation()!.employeeId,
-        this.chatMessage
+        messageContent
       );
-      
-      this.chatMessage = '';
-      
-      // Reload messages after sending
-      setTimeout(() => {
-        if (this.selectedConversation()) {
-          this.loadMessagesUltimate(
-            this.currentUserId(), 
-            this.selectedConversation()!.employeeId
-          );
-        }
-      }, 500);
-      
+
     } catch (error) {
+      this.chatMessage = messageContent;
       console.error('❌ Error sending message:', error);
-      alert('Failed to send message. Please try again.');
+      await this.showAlert('Failed to send message. Please try again.', 'error', 'Chat Error');
     }
   }
 
   getEmployeeName(employeeId: string): string {
     const employee = this.employees().find((e) => e.id === employeeId);
     return employee?.name || employee?.email || 'Unknown Employee';
+  }
+
+  toggleProjectTeamMember(employeeId: string, event: Event) {
+    const checked = (event.target as HTMLInputElement).checked;
+    const selected = new Set(this.projectTeamSelection());
+
+    if (checked) {
+      selected.add(employeeId);
+    } else {
+      selected.delete(employeeId);
+    }
+
+    const teamMembers = Array.from(selected);
+    this.projectTeamSelection.set(teamMembers);
+    this.projectForm.patchValue({ teamMembers }, { emitEvent: false });
+  }
+
+  isProjectTeamMemberSelected(employeeId: string): boolean {
+    return this.projectTeamSelection().includes(employeeId);
+  }
+
+  getAssignableEmployeesForSelectedProject(): User[] {
+    const projectId = this.taskForm?.get('projectId')?.value;
+    if (!projectId) {
+      return [];
+    }
+
+    const project = this.projects().find((item) => item.id === projectId);
+    if (!project) {
+      return [];
+    }
+
+    const members = new Set(project.teamMembers || []);
+    return this.employees().filter((employee) => members.has(employee.id));
+  }
+
+  private onTaskProjectChanged(projectId: string) {
+    if (!projectId) {
+      this.taskForm.patchValue({ assignedTo: '' }, { emitEvent: false });
+      return;
+    }
+
+    const assignableIds = new Set(this.getAssignableEmployeesForSelectedProject().map((emp) => emp.id));
+    const selectedAssignee = this.taskForm.get('assignedTo')?.value;
+
+    if (selectedAssignee && !assignableIds.has(selectedAssignee)) {
+      this.taskForm.patchValue({ assignedTo: '' }, { emitEvent: false });
+    }
   }
 
   getTabTitle(): string {
@@ -2190,6 +1702,11 @@ loadConversationsUltimate(adminId: string) {
     console.log('Toggle project form clicked');
     console.log('Current user:', this.authService.getCurrentUser()?.email);
     this.showCreateProjectForm.update((v) => !v);
+
+    if (!this.showCreateProjectForm()) {
+      this.projectTeamSelection.set([]);
+      this.projectForm.patchValue({ teamMembers: [] }, { emitEvent: false });
+    }
   }
 
   toggleCreateTaskForm() {

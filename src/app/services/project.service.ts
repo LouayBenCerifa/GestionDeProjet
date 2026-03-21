@@ -11,6 +11,7 @@ import {
   where,
   getDocs,
   getDoc,
+  writeBatch,
 } from '@angular/fire/firestore';
 import { Observable, from } from 'rxjs';
 import { map } from 'rxjs/operators';
@@ -71,7 +72,7 @@ export class ProjectService {
       };
 
       const docRef = await addDoc(projectsRef, newProject);
-      console.log('✅ Project created with ID:', docRef.id);
+      console.log('Project created with ID:', docRef.id);
       
       return docRef.id;
     } catch (error) {
@@ -93,13 +94,13 @@ export class ProjectService {
       }
       
       const projectsRef = collection(this.firestore, 'projects');
-      console.log('📁 Projects ref created');
+      console.log('Projects ref created');
       
       const q = query(projectsRef, where('adminId', '==', adminId));
       console.log('🔎 Query created');
       
       const querySnapshot = await getDocs(q);
-      console.log('📊 Query snapshot received:', querySnapshot.size, 'documents');
+      console.log('Query snapshot received:', querySnapshot.size, 'documents');
       
       const projects: Project[] = [];
       
@@ -267,11 +268,22 @@ export class ProjectService {
   }
 
   /**
-   * Delete project
+   * Delete project and all related tasks
    */
   async deleteProject(projectId: string): Promise<void> {
+    const batch = writeBatch(this.firestore);
     const projectRef = doc(this.firestore, 'projects', projectId);
-    await deleteDoc(projectRef);
+
+    const tasksRef = collection(this.firestore, 'tasks');
+    const tasksQuery = query(tasksRef, where('projectId', '==', projectId));
+    const tasksSnapshot = await getDocs(tasksQuery);
+
+    tasksSnapshot.forEach((taskDoc) => {
+      batch.delete(taskDoc.ref);
+    });
+
+    batch.delete(projectRef);
+    await batch.commit();
   }
 
   /**
@@ -329,7 +341,7 @@ export class ProjectService {
    */
   async getAdminDashboardStats(adminId: string): Promise<AdminDashboardStats> {
     try {
-      console.log('📊 Getting admin dashboard stats for:', adminId);
+      console.log('Getting admin dashboard stats for:', adminId);
       
       // Get projects
       const projectsRef = collection(this.firestore, 'projects');
@@ -342,7 +354,7 @@ export class ProjectService {
         return status === 'in-progress' || status === 'planning';
       }).length;
 
-      console.log('📈 Projects - Total:', totalProjects, 'Active:', activeProjects);
+      console.log('Projects - Total:', totalProjects, 'Active:', activeProjects);
 
       // Get tasks
       const tasksRef = collection(this.firestore, 'tasks');
@@ -353,7 +365,7 @@ export class ProjectService {
       const completedTasks = tasksSnap.docs.filter((doc) => doc.data()['status'] === 'done').length;
       const taskCompletionRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
 
-      console.log('📋 Tasks - Total:', totalTasks, 'Completed:', completedTasks, 'Rate:', taskCompletionRate);
+      console.log('Tasks - Total:', totalTasks, 'Completed:', completedTasks, 'Rate:', taskCompletionRate);
 
       // Get employees
       const usersRef = collection(this.firestore, 'users');
@@ -361,7 +373,7 @@ export class ProjectService {
       const usersSnap = await getDocs(usersQuery);
       const activeEmployees = usersSnap.size;
 
-      console.log('👥 Employees - Active:', activeEmployees);
+      console.log('Employees - Active:', activeEmployees);
 
       // Get project progress
       const projectProgress: ProjectProgress[] = projectsSnap.docs.map((doc) => {

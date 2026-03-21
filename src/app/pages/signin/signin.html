@@ -2,7 +2,7 @@
 <div class="signin-container">
   <div class="signin-card">
     <header style="text-align:center; margin-bottom: 24px;">
-      <h1>GestionPro <span style="font-size:1.2em;">🔒</span></h1>
+      <h1>GestionPro <span style="font-size:0.8em; letter-spacing:0.08em;">SECURE</span></h1>
       <div class="subtitle">Sign in to your account to continue</div>
     </header>
     <form [formGroup]="LoginForm" (ngSubmit)="Login()" class="signin-form" autocomplete="on">
@@ -51,16 +51,26 @@
         }
       </div>
       <!-- Error Message -->
+      @if (isOffline) {
+        <div class="global-error">
+          You are offline. Check your internet connection and try again.
+        </div>
+      }
       @if (errorMessage) {
         <div class="global-error">
           {{ errorMessage }}
+        </div>
+      }
+      @if (successMessage) {
+        <div class="global-success">
+          {{ successMessage }}
         </div>
       }
       <!-- Submit Button -->
       <button 
         type="submit" 
         class="submit-btn"
-        [disabled]="LoginForm.invalid || isLoading"
+        [disabled]="LoginForm.invalid || isLoading || isOffline"
         aria-busy="{{isLoading}}"
       >
         @if (isLoading) {
@@ -74,7 +84,18 @@
         <span>Don't have an account?</span>
         <a routerLink="/registre" class="link">Sign up</a>
         <span style="margin:0 8px;">|</span>
-        <a (click)="resetPassword()" class="link">Forgot password?</a>
+        <button
+          type="button"
+          class="link link-button"
+          (click)="resetPassword()"
+          [disabled]="isResettingPassword || isLoading"
+        >
+          @if (isResettingPassword) {
+            Sending reset link...
+          } @else {
+            Forgot password?
+          }
+        </button>
       </div>
     </form>
   </div>

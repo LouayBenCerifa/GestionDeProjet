@@ -41,8 +41,22 @@ export interface Task {
   completionPercentage: number;
   comments: TaskComment[];
   attachments?: string[];
+  effortPoints?: number;
+  estimatedHours?: number;
+  actualHours?: number;
+  reminderOffsetsMinutes?: number[];
+  recurrence?: TaskRecurrence;
+  sourceTaskId?: string;
+  generatedTaskIds?: string[];
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface TaskRecurrence {
+  enabled: boolean;
+  frequency: 'daily' | 'weekly' | 'monthly';
+  interval?: number;
+  endDate?: Date;
 }
 
 // Task Comment Model
@@ -125,4 +139,25 @@ export interface EmployeeDashboardStats {
   inProgressTasks: number;
   overdueTaskCount: number;
   taskCompletionRate: number;
+}
+
+export interface TaskActivityEntry {
+  id: string;
+  taskId: string;
+  projectId: string;
+  actorId: string;
+  actorName: string;
+  actorRole: 'admin' | 'employee' | 'system';
+  action:
+    | 'created'
+    | 'updated'
+    | 'status-changed'
+    | 'comment-added'
+    | 'reassigned'
+    | 'deleted'
+    | 'bulk-updated'
+    | 'recurring-generated'
+    | 'reminder-updated';
+  metadata?: Record<string, any>;
+  createdAt: Date;
 }

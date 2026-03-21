@@ -50,8 +50,12 @@ export class AuthService {
   // Login user with role-based navigation
   async login(email: string, password: string): Promise<void> {
     try {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        throw new Error('You are offline. Please check your internet connection and try again.');
+      }
+
       const result = await signInWithEmailAndPassword(this.auth, email, password);
-      console.log('✅ User signed in:', result.user.email);
+      console.log('User signed in:', result.user.email);
       
       // Get user role and navigate accordingly
       const userRole = await this.getUserRole(result.user.uid);
@@ -78,6 +82,12 @@ export class AuthService {
         case 'auth/too-many-requests':
           errorMessage = 'Too many failed attempts. Please try again later.';
           break;
+        case 'auth/network-request-failed':
+          errorMessage = 'Network error. Please check your internet connection and try again.';
+          break;
+        case 'auth/internal-error':
+          errorMessage = 'Authentication service is temporarily unavailable. Please try again in a moment.';
+          break;
       }
       
       throw new Error(errorMessage);
@@ -88,7 +98,7 @@ export class AuthService {
   async register(email: string, password: string, role: string = 'employee'): Promise<void> {
     try {
       const result = await createUserWithEmailAndPassword(this.auth, email, password);
-      console.log('✅ User registered:', result.user.email);
+      console.log('User registered:', result.user.email);
       
       // Create user document in Firestore with role
       const userDocRef = doc(this.firestore, 'users', result.user.uid);
@@ -172,12 +182,42 @@ export class AuthService {
 
   // Reset password
   async resetPassword(email: string): Promise<void> {
+    const normalizedEmail = (email || '').trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      throw new Error('Please enter your email address.');
+    }
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      throw new Error('You are offline. Please check your internet connection and try again.');
+    }
+
     try {
-      await sendPasswordResetEmail(this.auth, email);
-      console.log('✅ Password reset email sent');
+      await sendPasswordResetEmail(this.auth, normalizedEmail);
+      console.log('Password reset email sent');
     } catch (error: any) {
       console.error('❌ Password reset failed:', error.message);
-      throw error;
+
+      let errorMessage = 'Failed to send reset email. Please try again.';
+      switch (error.code) {
+        case 'auth/invalid-email':
+          errorMessage = 'Invalid email address.';
+          break;
+        case 'auth/missing-email':
+          errorMessage = 'Please enter your email address.';
+          break;
+        case 'auth/user-not-found':
+          errorMessage = 'No account found with this email.';
+          break;
+        case 'auth/too-many-requests':
+          errorMessage = 'Too many reset requests. Please try again later.';
+          break;
+        case 'auth/network-request-failed':
+          errorMessage = 'Network error. Please check your internet connection and try again.';
+          break;
+      }
+
+      throw new Error(errorMessage);
     }
   }
 
@@ -185,7 +225,7 @@ export class AuthService {
   async logout(): Promise<void> {
     try {
       await signOut(this.auth);
-      console.log('✅ User signed out');
+      console.log('User signed out');
       await this.router.navigate(['/signin']);
     } catch (error: any) {
       console.error('❌ Logout failed:', error.message);
