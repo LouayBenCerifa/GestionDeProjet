@@ -391,7 +391,9 @@ textarea::placeholder {
 	.priority-high { @apply bg-orange-100 text-orange-700; }
 	.priority-urgent { @apply bg-red-100 text-red-800; }
 	.status-todo { @apply bg-slate-100 text-slate-500; }
+	.status-pending-approval { @apply bg-violet-100 text-violet-800; }
 	.status-done { @apply bg-emerald-100 text-emerald-800; }
+	.status-note { @apply mt-2 inline-block text-xs font-medium text-violet-700; }
 
 	.btn { @apply px-5 py-2.5 rounded-lg text-sm font-semibold border border-transparent; }
 	.btn-primary { @apply text-white bg-gradient-to-r from-indigo-500 to-indigo-700; }

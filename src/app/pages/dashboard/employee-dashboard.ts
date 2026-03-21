@@ -33,6 +33,7 @@ import { ChatService } from '../../services/chat.service';
 import {
   Project,
   Task,
+  TaskVerification,
   User,
   EmployeeDashboardStats,
   Conversation,
@@ -358,6 +359,7 @@ interface ExtendedEmployeeDashboardStats {
                     <option value="all">All Tasks</option>
                     <option value="todo">To Do</option>
                     <option value="in-progress">In Progress</option>
+                    <option value="pending-approval">Pending Approval</option>
                     <option value="done">Done</option>
                     <option value="overdue">Overdue</option>
                     <option value="high">High Priority</option>
@@ -398,13 +400,16 @@ interface ExtendedEmployeeDashboardStats {
                       <div class="progress-section">
                         <div class="progress-controls">
                           <label>Progress: {{ task.completionPercentage }}%</label>
-                          <input type="range" min="0" max="100" [value]="task.completionPercentage" 
+                          <input type="range" min="0" max="100" [value]="task.completionPercentage" [disabled]="isTaskLockedForReview(task) || task.status === 'done'"
                                  (change)="updateTaskProgressFromRange(task, $event)">
-                          <button class="btn-small" (click)="updateTaskStatusToDone(task)" *ngIf="task.status !== 'done'">Mark as Done</button>
+                          <button class="btn-small" (click)="submitTaskForReview(task)" [disabled]="isTaskLockedForReview(task) || task.status === 'done'">Submit for Review</button>
                         </div>
                         <div class="progress-bar-container">
                           <div class="progress-bar" [style.width.%]="task.completionPercentage"></div>
                         </div>
+                        @if (task.status === 'pending-approval') {
+                          <small class="status-note">Waiting for admin approval</small>
+                        }
                       </div>
                       <div class="task-comments">
                         <h4>Comments ({{ (task.comments || []).length }})</h4>
@@ -419,16 +424,16 @@ interface ExtendedEmployeeDashboardStats {
                           <p class="no-comments">No comments yet</p>
                         }
                         <div class="add-comment">
-                          <input type="text" placeholder="Add a comment..." #newComment>
-                          <button class="btn-small" (click)="addCommentToTask(task, newComment)">Add</button>
+                          <input type="text" placeholder="Add a comment..." #newComment [disabled]="isTaskLockedForReview(task)">
+                          <button class="btn-small" (click)="addCommentToTask(task, newComment)" [disabled]="isTaskLockedForReview(task)">Add</button>
                         </div>
                       </div>
                       <div class="task-actions">
                         <button class="btn-small" (click)="viewTaskDetails(task)">View Details</button>
                         <button class="btn-small" (click)="chatAboutTask(task)">Chat about Task</button>
                         <button class="btn-small" (click)="openTaskActivity(task.id)">Activity</button>
-                        <button class="btn-small" (click)="setTaskRemindersPrompt(task)">Reminders</button>
-                        <button class="btn-small" (click)="logOneHour(task.id)">+1h</button>
+                        <button class="btn-small" (click)="setTaskRemindersPrompt(task)" [disabled]="isTaskLockedForReview(task)">Reminders</button>
+                        <button class="btn-small" (click)="logOneHour(task.id)" [disabled]="isTaskLockedForReview(task)">+1h</button>
                       </div>
                     </div>
                   }
@@ -830,6 +835,9 @@ export class DashboardEmployeeComponent implements OnInit {
       case 'in-progress':
         tasks = tasks.filter(task => task.status === 'in-progress');
         break;
+      case 'pending-approval':
+        tasks = tasks.filter(task => task.status === 'pending-approval');
+        break;
       case 'done':
         tasks = tasks.filter(task => task.status === 'done');
         break;
@@ -861,7 +869,7 @@ export class DashboardEmployeeComponent implements OnInit {
                             (priorityOrder[b.priority as keyof typeof priorityOrder] || 4));
         break;
       case 'status':
-        const statusOrder = { todo: 0, 'in-progress': 1, done: 2 };
+        const statusOrder = { todo: 0, 'in-progress': 1, 'pending-approval': 2, done: 3 };
         tasks.sort((a, b) => (statusOrder[a.status as keyof typeof statusOrder] || 3) - 
                             (statusOrder[b.status as keyof typeof statusOrder] || 3));
         break;
@@ -1018,7 +1026,8 @@ export class DashboardEmployeeComponent implements OnInit {
               ...task,
               deadline: this.formatDate(task.deadline),
               createdAt: this.formatDate(task.createdAt),
-              updatedAt: this.formatDate(task.updatedAt)
+              updatedAt: this.formatDate(task.updatedAt),
+              verification: this.parseVerification(task.verification)
             }));
             this.tasks.set(formattedTasks);
             this.updateDashboardStats();
@@ -1095,6 +1104,7 @@ export class DashboardEmployeeComponent implements OnInit {
                 status: data['status'] || 'todo',
                 completionPercentage: data['completionPercentage'] || 0,
                 comments: data['comments'] || [],
+                verification: this.parseVerification(data['verification']),
                 createdAt: this.formatDate(data['createdAt']),
                 updatedAt: this.formatDate(data['updatedAt'])
               };
@@ -1404,13 +1414,15 @@ export class DashboardEmployeeComponent implements OnInit {
   }
 
   updateTaskProgress(task: Task) {
+    if (this.isTaskLockedForReview(task) || task.status === 'done') {
+      return;
+    }
+
     const newProgress = Math.min(100, task.completionPercentage + 10);
     
     // Update locally first for immediate feedback
     const updatedTask = { ...task, completionPercentage: newProgress };
-    if (newProgress >= 100) {
-      updatedTask.status = 'done';
-    } else if (newProgress > 0 && task.status === 'todo') {
+    if (newProgress > 0 && task.status === 'todo') {
       updatedTask.status = 'in-progress';
     }
     
@@ -1430,13 +1442,15 @@ export class DashboardEmployeeComponent implements OnInit {
   }
 
   updateTaskProgressFromRange(task: Task, event: any) {
+    if (this.isTaskLockedForReview(task) || task.status === 'done') {
+      return;
+    }
+
     const newProgress = parseInt(event.target.value, 10);
     
     // Update locally first for immediate feedback
     const updatedTask = { ...task, completionPercentage: newProgress };
-    if (newProgress >= 100) {
-      updatedTask.status = 'done';
-    } else if (newProgress > 0 && task.status === 'todo') {
+    if (newProgress > 0 && task.status === 'todo') {
       updatedTask.status = 'in-progress';
     }
     
@@ -1455,6 +1469,9 @@ export class DashboardEmployeeComponent implements OnInit {
   }
 
   updateTaskStatusToDone(task: Task) {
+    void this.showAlert('Tasks must be submitted for admin verification before completion.', 'info', 'Verification Required');
+    return;
+
     const updatedTask = { 
       ...task, 
       status: 'done' as const,
@@ -1476,6 +1493,11 @@ export class DashboardEmployeeComponent implements OnInit {
   }
 
   async addComment(task: Task) {
+    if (this.isTaskLockedForReview(task)) {
+      await this.showAlert('This task is pending admin review. Comments are locked until reviewed.', 'info', 'Task Locked');
+      return;
+    }
+
     const comment = await this.showTextInput('Add Comment', 'Enter your comment');
     if (comment) {
       this.taskService.addCommentToTask(
@@ -1497,6 +1519,10 @@ export class DashboardEmployeeComponent implements OnInit {
   }
 
   addCommentToTask(task: Task, inputElement: HTMLInputElement) {
+    if (this.isTaskLockedForReview(task)) {
+      return;
+    }
+
     const comment = inputElement.value.trim();
     if (comment) {
       this.taskService.addCommentToTask(
@@ -1536,6 +1562,11 @@ export class DashboardEmployeeComponent implements OnInit {
   }
 
   async setTaskRemindersPrompt(task: Task) {
+    if (this.isTaskLockedForReview(task)) {
+      await this.showAlert('This task is pending admin review. Reminders are locked until reviewed.', 'info', 'Task Locked');
+      return;
+    }
+
     const currentValue = (task.reminderOffsetsMinutes || []).join(', ');
     const input = await this.showTextInput('Reminders', 'Enter reminder offsets in minutes (comma separated)', currentValue);
     if (input === null) {
@@ -1560,6 +1591,12 @@ export class DashboardEmployeeComponent implements OnInit {
   }
 
   async logOneHour(taskId: string) {
+    const targetTask = this.tasks().find(task => task.id === taskId);
+    if (targetTask && this.isTaskLockedForReview(targetTask)) {
+      await this.showAlert('This task is pending admin review. Time logging is locked until reviewed.', 'info', 'Task Locked');
+      return;
+    }
+
     try {
       await this.taskService.addActualHours(taskId, 1);
       this.loadEmployeeTasks(this.currentUserId());
@@ -1623,6 +1660,90 @@ export class DashboardEmployeeComponent implements OnInit {
     }
 
     return String(result.value ?? '').trim();
+  }
+
+  isTaskLockedForReview(task: Task): boolean {
+    return task.status === 'pending-approval';
+  }
+
+  async submitTaskForReview(task: Task) {
+    if (this.isTaskLockedForReview(task) || task.status === 'done') {
+      return;
+    }
+
+    const result = await Swal.fire({
+      title: 'Submit Task for Review',
+      html: `
+        <div style="text-align:left; display:grid; gap:10px;">
+          <label for="verification-notes" style="font-weight:600;">Completion Notes *</label>
+          <textarea id="verification-notes" class="swal2-textarea" placeholder="Summarize what was completed"></textarea>
+          <label for="verification-evidence" style="font-weight:600;">Evidence Links (optional)</label>
+          <textarea id="verification-evidence" class="swal2-textarea" placeholder="One URL per line"></textarea>
+          <label for="verification-time" style="font-weight:600;">Time Spent (hours) *</label>
+          <input id="verification-time" type="number" min="0.5" step="0.5" class="swal2-input" value="${Math.max(1, task.actualHours || 0)}" />
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: 'Submit',
+      cancelButtonText: 'Cancel',
+      focusConfirm: false,
+      preConfirm: () => {
+        const notesInput = document.getElementById('verification-notes') as HTMLTextAreaElement | null;
+        const evidenceInput = document.getElementById('verification-evidence') as HTMLTextAreaElement | null;
+        const timeInput = document.getElementById('verification-time') as HTMLInputElement | null;
+
+        const completionNotes = (notesInput?.value || '').trim();
+        const evidence = (evidenceInput?.value || '')
+          .split(/\r?\n/)
+          .map(item => item.trim())
+          .filter(Boolean);
+        const timeSpent = Number(timeInput?.value || 0);
+
+        if (!completionNotes) {
+          Swal.showValidationMessage('Completion notes are required.');
+          return null;
+        }
+
+        if (!Number.isFinite(timeSpent) || timeSpent <= 0) {
+          Swal.showValidationMessage('Time spent must be greater than 0.');
+          return null;
+        }
+
+        return { completionNotes, evidence, timeSpent };
+      }
+    });
+
+    if (!result.isConfirmed || !result.value) {
+      return;
+    }
+
+    try {
+      await this.taskService.submitTaskForApproval(task.id, this.currentUserId(), result.value);
+      await this.showAlert('Task submitted for admin approval.', 'success', 'Submitted');
+      this.loadEmployeeTasks(this.currentUserId());
+      this.updateDashboardStats();
+    } catch (error: any) {
+      console.error('❌ Error submitting task for approval:', error);
+      await this.showAlert('Failed to submit task: ' + error.message, 'error', 'Submission Failed');
+    }
+  }
+
+  private parseVerification(value: any): TaskVerification | undefined {
+    if (!value || typeof value !== 'object') {
+      return undefined;
+    }
+
+    return {
+      submittedBy: value['submittedBy'] || '',
+      submittedAt: this.formatDate(value['submittedAt']),
+      status: value['status'] || 'pending-approval',
+      completionNotes: value['completionNotes'] || '',
+      evidence: Array.isArray(value['evidence']) ? value['evidence'].map((item: any) => String(item)) : [],
+      timeSpent: Number(value['timeSpent'] || 0),
+      approvedBy: value['approvedBy'] || undefined,
+      approvedAt: value['approvedAt'] ? this.formatDate(value['approvedAt']) : undefined,
+      rejectionReason: value['rejectionReason'] || undefined
+    };
   }
 
   viewTaskDetails(task: Task) {

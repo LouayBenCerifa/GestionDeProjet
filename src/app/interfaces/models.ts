@@ -35,7 +35,7 @@ export interface Task {
   description: string;
   assignedTo: string; // Employee ID
   assignedBy: string; // Admin ID
-  status: 'todo' | 'in-progress' | 'done';
+  status: 'todo' | 'in-progress' | 'pending-approval' | 'done';
   priority: 'low' | 'medium' | 'high' | 'urgent';
   deadline: Date;
   completionPercentage: number;
@@ -48,8 +48,21 @@ export interface Task {
   recurrence?: TaskRecurrence;
   sourceTaskId?: string;
   generatedTaskIds?: string[];
+  verification?: TaskVerification;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface TaskVerification {
+  submittedBy: string;
+  submittedAt: Date;
+  approvedBy?: string;
+  approvedAt?: Date;
+  status: 'pending-approval' | 'approved' | 'rejected' | 'changes-requested';
+  rejectionReason?: string;
+  completionNotes: string;
+  evidence: string[];
+  timeSpent: number;
 }
 
 export interface TaskRecurrence {

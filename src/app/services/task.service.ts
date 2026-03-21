@@ -116,6 +116,7 @@ export class TaskService {
               deadline: t.deadline?.toDate ? t.deadline.toDate() : t.deadline,
               createdAt: t.createdAt?.toDate ? t.createdAt.toDate() : t.createdAt,
               updatedAt: t.updatedAt?.toDate ? t.updatedAt.toDate() : t.updatedAt,
+              verification: this.parseVerification(t.verification),
             } as Task;
           });
           subscriber.next(tasks);
@@ -150,6 +151,7 @@ export class TaskService {
             deadline: deadline?.toDate ? deadline.toDate() : (deadline instanceof Date ? deadline : new Date(deadline)),
             createdAt: createdAt?.toDate ? createdAt.toDate() : (createdAt instanceof Date ? createdAt : new Date(createdAt)),
             updatedAt: updatedAt?.toDate ? updatedAt.toDate() : (updatedAt instanceof Date ? updatedAt : new Date(updatedAt)),
+            verification: this.parseVerification(t.verification),
           } as Task;
         });
 
@@ -184,6 +186,7 @@ export class TaskService {
             deadline: taskData.deadline?.toDate ? taskData.deadline.toDate() : taskData.deadline,
             createdAt: taskData.createdAt?.toDate ? taskData.createdAt.toDate() : taskData.createdAt,
             updatedAt: taskData.updatedAt?.toDate ? taskData.updatedAt.toDate() : taskData.updatedAt,
+            verification: this.parseVerification(taskData.verification),
           } as Task);
         },
         (error) => subscriber.error(error)
@@ -271,7 +274,7 @@ export class TaskService {
    */
   async updateTaskStatus(
     taskId: string,
-    newStatus: 'todo' | 'in-progress' | 'done',
+    newStatus: 'todo' | 'in-progress' | 'pending-approval' | 'done',
     completionPercentage: number
   ): Promise<void> {
     const taskRef = doc(this.firestore, 'tasks', taskId);
@@ -309,6 +312,193 @@ export class TaskService {
         completionPercentage: normalizedCompletion,
       },
     });
+
+    await this.syncProjectProgress((taskData['projectId'] || '') as string);
+  }
+
+  async submitTaskForApproval(
+    taskId: string,
+    employeeId: string,
+    payload: { completionNotes: string; evidence?: string[]; timeSpent: number }
+  ): Promise<void> {
+    const taskRef = doc(this.firestore, 'tasks', taskId);
+    const taskSnapshot = await getDoc(taskRef);
+
+    if (!taskSnapshot.exists()) {
+      throw new Error('Task not found');
+    }
+
+    const taskData = taskSnapshot.data();
+    const assignedTo = (taskData['assignedTo'] || '') as string;
+    const currentStatus = (taskData['status'] || 'todo') as string;
+
+    if (assignedTo !== employeeId) {
+      throw new Error('You are not allowed to submit this task');
+    }
+
+    if (currentStatus === 'done' || currentStatus === 'pending-approval') {
+      throw new Error('Task is already finalized or pending review');
+    }
+
+    const completionNotes = (payload.completionNotes || '').trim();
+    if (!completionNotes) {
+      throw new Error('Completion notes are required');
+    }
+
+    const timeSpent = this.normalizeHours(payload.timeSpent);
+    if (timeSpent <= 0) {
+      throw new Error('Time spent must be greater than 0');
+    }
+
+    const evidence = Array.isArray(payload.evidence)
+      ? payload.evidence.map((item) => String(item || '').trim()).filter(Boolean)
+      : [];
+
+    await updateDoc(taskRef, {
+      status: 'pending-approval',
+      verification: {
+        submittedBy: employeeId,
+        submittedAt: Timestamp.now(),
+        status: 'pending-approval',
+        completionNotes,
+        evidence,
+        timeSpent,
+      },
+      updatedAt: Timestamp.now(),
+    });
+
+    await this.taskActivityService.logEvent({
+      taskId,
+      projectId: (taskData['projectId'] || '') as string,
+      actorId: employeeId,
+      actorName: 'Employee',
+      actorRole: 'employee',
+      action: 'status-changed',
+      metadata: {
+        from: currentStatus,
+        to: 'pending-approval',
+        timeSpent,
+      },
+    });
+
+    await this.notificationService.notifyTaskSubmittedForReview(
+      (taskData['assignedBy'] || '') as string,
+      employeeId,
+      taskId,
+      (taskData['title'] || 'Task') as string
+    );
+  }
+
+  async approveTaskSubmission(taskId: string, adminId: string): Promise<void> {
+    const taskRef = doc(this.firestore, 'tasks', taskId);
+    const taskSnapshot = await getDoc(taskRef);
+
+    if (!taskSnapshot.exists()) {
+      throw new Error('Task not found');
+    }
+
+    const taskData = taskSnapshot.data();
+    const previousStatus = (taskData['status'] || 'todo') as string;
+    if (previousStatus !== 'pending-approval') {
+      throw new Error('Task is not pending approval');
+    }
+
+    const currentVerification = taskData['verification'] || {};
+    await updateDoc(taskRef, {
+      status: 'done',
+      completionPercentage: 100,
+      verification: {
+        ...currentVerification,
+        status: 'approved',
+        approvedBy: adminId,
+        approvedAt: Timestamp.now(),
+        rejectionReason: null,
+      },
+      updatedAt: Timestamp.now(),
+    });
+
+    await this.taskActivityService.logEvent({
+      taskId,
+      projectId: (taskData['projectId'] || '') as string,
+      actorId: adminId,
+      actorName: 'Admin',
+      actorRole: 'admin',
+      action: 'status-changed',
+      metadata: { from: previousStatus, to: 'done', review: 'approved' },
+    });
+
+    await this.notificationService.notifyTaskApproved(
+      (taskData['assignedTo'] || '') as string,
+      adminId,
+      taskId,
+      (taskData['title'] || 'Task') as string
+    );
+
+    await this.generateNextRecurringTask(taskId);
+    await this.syncProjectProgress((taskData['projectId'] || '') as string);
+  }
+
+  async rejectTaskSubmission(
+    taskId: string,
+    adminId: string,
+    feedback: string,
+    returnStatus: 'todo' | 'in-progress' = 'in-progress',
+    requestChanges = false
+  ): Promise<void> {
+    const taskRef = doc(this.firestore, 'tasks', taskId);
+    const taskSnapshot = await getDoc(taskRef);
+
+    if (!taskSnapshot.exists()) {
+      throw new Error('Task not found');
+    }
+
+    const taskData = taskSnapshot.data();
+    const previousStatus = (taskData['status'] || 'todo') as string;
+    if (previousStatus !== 'pending-approval') {
+      throw new Error('Task is not pending approval');
+    }
+
+    const reason = (feedback || '').trim();
+    if (!reason) {
+      throw new Error('Feedback is required for rejection');
+    }
+
+    const currentVerification = taskData['verification'] || {};
+    await updateDoc(taskRef, {
+      status: returnStatus,
+      verification: {
+        ...currentVerification,
+        status: requestChanges ? 'changes-requested' : 'rejected',
+        approvedBy: adminId,
+        approvedAt: Timestamp.now(),
+        rejectionReason: reason,
+      },
+      updatedAt: Timestamp.now(),
+    });
+
+    await this.taskActivityService.logEvent({
+      taskId,
+      projectId: (taskData['projectId'] || '') as string,
+      actorId: adminId,
+      actorName: 'Admin',
+      actorRole: 'admin',
+      action: 'status-changed',
+      metadata: {
+        from: previousStatus,
+        to: returnStatus,
+        review: requestChanges ? 'changes-requested' : 'rejected',
+        feedback: reason,
+      },
+    });
+
+    await this.notificationService.notifyTaskRejected(
+      (taskData['assignedTo'] || '') as string,
+      adminId,
+      taskId,
+      (taskData['title'] || 'Task') as string,
+      reason,
+      requestChanges
+    );
 
     await this.syncProjectProgress((taskData['projectId'] || '') as string);
   }
@@ -880,6 +1070,20 @@ export class TaskService {
       .map((offset) => Math.round(offset));
 
     return Array.from(new Set(normalized)).sort((left, right) => left - right);
+  }
+
+  private parseVerification(value: any): any {
+    if (!value || typeof value !== 'object') {
+      return undefined;
+    }
+
+    return {
+      ...value,
+      submittedAt: value['submittedAt']?.toDate ? value['submittedAt'].toDate() : value['submittedAt'],
+      approvedAt: value['approvedAt']?.toDate ? value['approvedAt'].toDate() : value['approvedAt'],
+      evidence: Array.isArray(value['evidence']) ? value['evidence'] : [],
+      timeSpent: Number(value['timeSpent'] || 0),
+    };
   }
 
   private generateEntityId(): string {

@@ -104,6 +104,12 @@ interface DashboardMessage {
                (click)="onTabChange('tasks', $event)">
               <span class="icon material-symbols-rounded app-icon">task_alt</span> Tasks
             </a>
+
+            <a class="nav-item" 
+               [class.active]="activeTab() === 'verification'" 
+               (click)="onTabChange('verification', $event)">
+              <span class="icon material-symbols-rounded app-icon">fact_check</span> Verification Queue
+            </a>
             
             <a class="nav-item" 
                [class.active]="activeTab() === 'chat'" 
@@ -560,6 +566,70 @@ interface DashboardMessage {
             </section>
           }
 
+          <!-- Verification Queue Tab -->
+          @if (activeTab() === 'verification') {
+            <section class="content">
+              <div class="section-header">
+                <h2>Verification Queue</h2>
+                <div class="filter-controls">
+                  <select class="input" [ngModel]="verificationProjectFilter()" (ngModelChange)="verificationProjectFilter.set($event)">
+                    <option value="all">All Projects</option>
+                    @for (project of projects(); track project.id) {
+                      <option [value]="project.id">{{ project.name }}</option>
+                    }
+                  </select>
+                  <select class="input" [ngModel]="verificationPriorityFilter()" (ngModelChange)="verificationPriorityFilter.set($event)">
+                    <option value="all">All Priorities</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                  <select class="input" [ngModel]="verificationSortBy()" (ngModelChange)="verificationSortBy.set($event)">
+                    <option value="newest">Newest Submission</option>
+                    <option value="oldest">Oldest Submission</option>
+                    <option value="priority">Priority</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="tasks-list">
+                @if (verificationQueueTasks().length > 0) {
+                  @for (task of verificationQueueTasks(); track task.id) {
+                    <div class="task-card verification-task-card">
+                      <div class="task-header">
+                        <h3>{{ task.title }}</h3>
+                        <div class="task-status-badges">
+                          <span class="priority-badge" [class]="'priority-' + task.priority">{{ task.priority | uppercase }}</span>
+                          <span class="status-badge status-pending-approval">Pending Approval</span>
+                        </div>
+                      </div>
+                      <div class="task-meta">
+                        <span>Project: {{ getProjectName(task.projectId) }}</span>
+                        <span>Employee: {{ getEmployeeName(task.assignedTo) }}</span>
+                        <span>Submitted: {{ task.verification?.submittedAt | date: 'MMM dd, yyyy HH:mm' }}</span>
+                        <span>Time Spent: {{ task.verification?.timeSpent || 0 }}h</span>
+                      </div>
+                      <p class="task-description">{{ task.verification?.completionNotes || 'No completion notes provided.' }}</p>
+                      @if (task.verification?.evidence && task.verification!.evidence.length > 0) {
+                        <div class="task-meta">
+                          <span class="meta-chip"><span class="material-symbols-rounded">attach_file</span>Evidence: {{ task.verification!.evidence.length }}</span>
+                        </div>
+                      }
+                      <div class="task-actions">
+                        <button class="btn-small" (click)="reviewVerificationTask(task)">Review Submission</button>
+                      </div>
+                    </div>
+                  }
+                } @else {
+                  <div class="empty-state">
+                    <p>No tasks pending approval.</p>
+                  </div>
+                }
+              </div>
+            </section>
+          }
+
           <!-- Chat Tab -->
           @if (activeTab() === 'chat') {
             <section class="content">
@@ -721,13 +791,16 @@ export class DashboardComponent implements OnInit {
   projectTeamSelection = signal<string[]>([]);
 
   selectedTaskFilter = signal<'all' | 'my-overdue' | 'due-this-week' | 'unassigned'>('all');
+  verificationProjectFilter = signal('all');
+  verificationPriorityFilter = signal<'all' | 'low' | 'medium' | 'high' | 'urgent'>('all');
+  verificationSortBy = signal<'newest' | 'oldest' | 'priority'>('newest');
   bulkStatus = '';
   bulkPriority = '';
   bulkAssignee = '';
 
   dashboardStats = signal<AdminDashboardStats | null>(null);
 
-  activeTab = signal<'dashboard' | 'projects' | 'tasks' | 'chat' | 'settings'>('dashboard');
+  activeTab = signal<'dashboard' | 'projects' | 'tasks' | 'verification' | 'chat' | 'settings'>('dashboard');
   showNotifications = signal(false);
   showCreateProjectForm = signal(false);
   showCreateTaskForm = signal(false);
@@ -735,6 +808,34 @@ export class DashboardComponent implements OnInit {
   chatMessage = '';
 
   unreadNotifications = computed(() => this.notifications().filter(notification => !notification.read).length);
+
+  verificationQueueTasks = computed(() => {
+    let queue = this.tasks().filter((task) => task.status === 'pending-approval');
+
+    if (this.verificationProjectFilter() !== 'all') {
+      queue = queue.filter((task) => task.projectId === this.verificationProjectFilter());
+    }
+
+    if (this.verificationPriorityFilter() !== 'all') {
+      queue = queue.filter((task) => task.priority === this.verificationPriorityFilter());
+    }
+
+    const priorityOrder: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
+
+    switch (this.verificationSortBy()) {
+      case 'oldest':
+        queue.sort((a, b) => this.getVerificationSubmittedAt(a).getTime() - this.getVerificationSubmittedAt(b).getTime());
+        break;
+      case 'priority':
+        queue.sort((a, b) => (priorityOrder[a.priority] ?? 4) - (priorityOrder[b.priority] ?? 4));
+        break;
+      default:
+        queue.sort((a, b) => this.getVerificationSubmittedAt(b).getTime() - this.getVerificationSubmittedAt(a).getTime());
+        break;
+    }
+
+    return queue;
+  });
 
   projectForm!: FormGroup;
   taskForm!: FormGroup;
@@ -860,6 +961,7 @@ export class DashboardComponent implements OnInit {
             status: data['status'] || 'todo',
             completionPercentage: data['completionPercentage'] || 0,
             comments: data['comments'] || [],
+            verification: this.parseVerificationData(data['verification']),
             createdAt: data['createdAt']?.toDate ? data['createdAt'].toDate() : new Date(),
             updatedAt: data['updatedAt']?.toDate ? data['updatedAt'].toDate() : new Date()
           };
@@ -1059,7 +1161,7 @@ loadConversationsUltimate(adminId: string) {
       });
   }
 
-  onTabChange(tab: 'dashboard' | 'projects' | 'tasks' | 'chat' | 'settings', event?: Event) {
+  onTabChange(tab: 'dashboard' | 'projects' | 'tasks' | 'verification' | 'chat' | 'settings', event?: Event) {
     if (event) {
       event.preventDefault();
       event.stopPropagation();
@@ -1087,6 +1189,9 @@ loadConversationsUltimate(adminId: string) {
         this.loadAdminProjects();
         break;
       case 'tasks':
+        this.loadTasks();
+        break;
+      case 'verification':
         this.loadTasks();
         break;
       case 'chat':
@@ -1503,6 +1608,75 @@ loadConversationsUltimate(adminId: string) {
       });
   }
 
+  async reviewVerificationTask(task: Task) {
+    const evidence = task.verification?.evidence || [];
+    const evidenceHtml = evidence.length
+      ? `<ul style="text-align:left;margin:8px 0 0 16px;">${evidence
+          .map((item: string) => `<li><a href="${item}" target="_blank" rel="noopener noreferrer">${item}</a></li>`)
+          .join('')}</ul>`
+      : '<p style="margin:8px 0 0; color:#64748b;">No evidence provided.</p>';
+
+    const action = await Swal.fire({
+      title: 'Review Task Submission',
+      html: `
+        <div style="text-align:left;">
+          <p><strong>Task:</strong> ${task.title}</p>
+          <p><strong>Project:</strong> ${this.getProjectName(task.projectId)}</p>
+          <p><strong>Employee:</strong> ${this.getEmployeeName(task.assignedTo)}</p>
+          <p><strong>Submitted:</strong> ${this.getVerificationSubmittedAt(task).toLocaleString()}</p>
+          <p><strong>Time Spent:</strong> ${task.verification?.timeSpent || 0}h</p>
+          <p><strong>Completion Notes:</strong><br>${task.verification?.completionNotes || 'No notes provided.'}</p>
+          <p><strong>Evidence:</strong>${evidenceHtml}</p>
+        </div>
+      `,
+      showDenyButton: true,
+      showCancelButton: true,
+      confirmButtonText: 'Approve',
+      denyButtonText: 'Reject',
+      cancelButtonText: 'Request Changes',
+      width: '720px'
+    });
+
+    try {
+      if (action.isConfirmed) {
+        await this.taskService.approveTaskSubmission(task.id, this.currentUserId());
+        await this.showAlert('Task approved successfully.', 'success', 'Verification');
+      } else if (action.isDenied) {
+        const rejectData = await this.promptReviewFeedback('Reject Task', 'todo');
+        if (!rejectData) {
+          return;
+        }
+        await this.taskService.rejectTaskSubmission(
+          task.id,
+          this.currentUserId(),
+          rejectData.feedback,
+          rejectData.returnStatus,
+          false
+        );
+        await this.showAlert('Task rejected and returned to employee.', 'success', 'Verification');
+      } else if (action.dismiss === Swal.DismissReason.cancel) {
+        const requestChangesData = await this.promptReviewFeedback('Request Changes', 'in-progress');
+        if (!requestChangesData) {
+          return;
+        }
+        await this.taskService.rejectTaskSubmission(
+          task.id,
+          this.currentUserId(),
+          requestChangesData.feedback,
+          requestChangesData.returnStatus,
+          true
+        );
+        await this.showAlert('Changes requested and feedback sent to employee.', 'success', 'Verification');
+      }
+
+      this.loadTasks();
+      this.loadDashboardStats(this.currentUserId());
+    } catch (error: any) {
+      console.error('❌ Error reviewing task submission:', error);
+      await this.showAlert('Verification action failed: ' + error.message, 'error', 'Verification Error');
+    }
+  }
+
   getTaskScore(task: Task): number {
     return this.taskService.getTaskPriorityScore(task);
   }
@@ -1517,6 +1691,70 @@ loadConversationsUltimate(adminId: string) {
       .map(item => Number(item.trim()))
       .filter(item => !Number.isNaN(item) && item > 0)
       .map(item => Math.round(item));
+  }
+
+  private getVerificationSubmittedAt(task: Task): Date {
+    const raw = task.verification?.submittedAt;
+    if ((raw as any)?.toDate) {
+      return (raw as any).toDate();
+    }
+    if (raw instanceof Date) {
+      return raw;
+    }
+    return task.updatedAt instanceof Date ? task.updatedAt : new Date(task.updatedAt || new Date());
+  }
+
+  private parseVerificationData(value: any): any {
+    if (!value || typeof value !== 'object') {
+      return undefined;
+    }
+
+    return {
+      ...value,
+      submittedAt: value['submittedAt']?.toDate ? value['submittedAt'].toDate() : value['submittedAt'],
+      approvedAt: value['approvedAt']?.toDate ? value['approvedAt'].toDate() : value['approvedAt'],
+      evidence: Array.isArray(value['evidence']) ? value['evidence'] : [],
+      timeSpent: Number(value['timeSpent'] || 0),
+    };
+  }
+
+  private async promptReviewFeedback(
+    title: string,
+    defaultStatus: 'todo' | 'in-progress'
+  ): Promise<{ feedback: string; returnStatus: 'todo' | 'in-progress' } | null> {
+    const result = await Swal.fire({
+      title,
+      html: `
+        <label style="display:block;text-align:left;margin-bottom:6px;">Return task status</label>
+        <select id="review-return-status" class="swal2-input">
+          <option value="todo" ${defaultStatus === 'todo' ? 'selected' : ''}>To Do</option>
+          <option value="in-progress" ${defaultStatus === 'in-progress' ? 'selected' : ''}>In Progress</option>
+        </select>
+        <label style="display:block;text-align:left;margin-top:8px;margin-bottom:6px;">Feedback (required)</label>
+        <textarea id="review-feedback" class="swal2-textarea" placeholder="Explain what needs to be fixed"></textarea>
+      `,
+      showCancelButton: true,
+      confirmButtonText: 'Submit',
+      preConfirm: () => {
+        const feedbackElement = document.getElementById('review-feedback') as HTMLTextAreaElement | null;
+        const statusElement = document.getElementById('review-return-status') as HTMLSelectElement | null;
+        const feedback = (feedbackElement?.value || '').trim();
+        const returnStatus = (statusElement?.value || defaultStatus) as 'todo' | 'in-progress';
+
+        if (!feedback) {
+          Swal.showValidationMessage('Feedback is required.');
+          return null;
+        }
+
+        return { feedback, returnStatus };
+      }
+    });
+
+    if (!result.isConfirmed || !result.value) {
+      return null;
+    }
+
+    return result.value as { feedback: string; returnStatus: 'todo' | 'in-progress' };
   }
 
   private parseEmployeeSelectionInput(input: string, employees: User[]): string[] {
@@ -1639,6 +1877,11 @@ loadConversationsUltimate(adminId: string) {
     return employee?.name || employee?.email || 'Unknown Employee';
   }
 
+  getProjectName(projectId: string): string {
+    const project = this.projects().find((item) => item.id === projectId);
+    return project?.name || 'Unknown Project';
+  }
+
   toggleProjectTeamMember(employeeId: string, event: Event) {
     const checked = (event.target as HTMLInputElement).checked;
     const selected = new Set(this.projectTeamSelection());
@@ -1692,6 +1935,7 @@ loadConversationsUltimate(adminId: string) {
       dashboard: 'Dashboard',
       projects: 'Projects',
       tasks: 'Tasks',
+      verification: 'Verification Queue',
       chat: 'Chat',
       settings: 'Settings',
     };

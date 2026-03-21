@@ -311,6 +311,56 @@ export class NotificationService {
       data: { senderId, conversationId }
     });
   }
+
+  async notifyTaskSubmittedForReview(
+    adminId: string,
+    employeeId: string,
+    taskId: string,
+    taskTitle: string
+  ): Promise<void> {
+    await this.createNotification({
+      userId: adminId,
+      type: 'task',
+      title: 'Task Submitted for Review',
+      message: `A task is waiting for your approval: ${taskTitle}`,
+      read: false,
+      data: { taskId, employeeId }
+    });
+  }
+
+  async notifyTaskApproved(
+    employeeId: string,
+    adminId: string,
+    taskId: string,
+    taskTitle: string
+  ): Promise<void> {
+    await this.createNotification({
+      userId: employeeId,
+      type: 'task',
+      title: 'Task Approved',
+      message: `Your task was approved: ${taskTitle}`,
+      read: false,
+      data: { taskId, adminId }
+    });
+  }
+
+  async notifyTaskRejected(
+    employeeId: string,
+    adminId: string,
+    taskId: string,
+    taskTitle: string,
+    feedback: string,
+    requestChanges = false
+  ): Promise<void> {
+    await this.createNotification({
+      userId: employeeId,
+      type: 'task',
+      title: requestChanges ? 'Task Changes Requested' : 'Task Rejected',
+      message: `${requestChanges ? 'Changes requested for' : 'Task rejected'}: ${taskTitle}. Feedback: ${feedback}`,
+      read: false,
+      data: { taskId, adminId, feedback, requestChanges }
+    });
+  }
   
   /**
    * Convert Firestore Timestamp to Date
