@@ -1,208 +1,306 @@
 # GestionDeProjet
 
-Role-based project management platform built with Angular + Firebase.
-
-It provides two operational dashboards:
-- Admin dashboard: project planning, team assignment, task control, verification, and monitoring.
-- Employee dashboard: task execution, progress updates, review submission, and collaboration.
+GestionDeProjet is a role-based project management application built with Angular and Firebase.
+It helps teams plan projects, assign tasks, track progress, and validate completed work through an admin review flow.
 
 ---
 
-## 1) Tech Stack
+## 1) App Concept
 
-- Frontend: Angular 20 (standalone components)
-- Backend/Auth/Data: Firebase Auth + Firestore
-- Styling: Tailwind CSS utilities via global design system
-- Dialogs & confirmations: SweetAlert2
-- State & UI reactivity: Angular signals + computed values
-- Realtime communication: Firestore streaming patterns
+The app is designed around two roles:
 
----
+- **Admin**: creates projects, assigns team members, manages tasks, reviews submitted work.
+- **Employee**: works on assigned tasks, logs progress/time, and submits tasks for admin validation.
 
-## 2) Routes
+The objective is to keep project execution transparent with:
 
-- `/signin`
-- `/dashboard/admin`
-- `/dashboard/employee`
+- clear ownership,
+- task-level tracking,
+- real-time communication,
+- and verification before final completion.
 
 ---
 
-## 3) Core Features
+## 2) Main Functions
 
-- Role-based access (admin vs employee)
-- Project lifecycle management (`planning`, `in-progress`, `on-hold`, `completed`)
-- Task assignment, prioritization, tracking, comments, reminders, and effort logging
-- Project progress computed from task completion
-- Realtime chat with unread/read (Sent/Seen) behavior
-- In-app notifications for task/chat/verification events
-- Task activity timeline (audit-style history)
+### Authentication & Access
+- Sign in with Firebase Authentication.
+- Role-based access to dashboard pages.
 
----
+### Project Management (Admin)
+- Create, update, and delete projects.
+- Assign project team members.
+- Track project status and completion.
 
-## 4) Task Verification Workflow (Latest Major Update)
+### Task Management
+- Create and assign tasks to employees.
+- Set priority, deadline, effort, and reminders.
+- Add comments and task activity history.
+- Log actual work time.
 
-### Goal
-No task can be considered completed without admin validation.
+### Verification Workflow
+- Employees cannot directly finalize tasks.
+- Employees submit task completion for review.
+- Admin reviews and can:
+  - approve,
+  - reject,
+  - or request changes.
+- Task status includes `pending-approval` to enforce this gate.
 
-### Status Flow
-- Employee working states: `todo` → `in-progress`
-- Submission state: `pending-approval`
-- Final state after admin review: `done` (approved) or back to `todo`/`in-progress` (rejected/requested changes)
-
-### Employee Side
-- Employees submit a task for review using **Submit for Review**.
-- Submission includes:
-	- completion notes (required)
-	- evidence links (optional)
-	- time spent (required)
-- Once submitted (`pending-approval`), task edit actions are locked until admin review.
-- Direct completion by employee is blocked (no direct “mark done” path).
-
-### Admin Side
-- New **Verification Queue** tab in admin dashboard.
-- Admin can filter/sort pending submissions and review details.
-- Admin review actions:
-	- Approve (task becomes `done`)
-	- Reject (task returned with feedback)
-	- Request changes (task returned with required revisions)
-
-### Data Model Update
-Tasks now support `status: 'pending-approval'` and include optional `verification` data:
-- `submittedBy`, `submittedAt`, `status`
-- `completionNotes`, `evidence[]`, `timeSpent`
-- `approvedBy`, `approvedAt`, `rejectionReason`
-
-### Notifications
-Verification notifications were added for:
-- submission sent to admin
-- approval sent to employee
-- rejection/changes request sent to employee
+### Communication & Notifications
+- Real-time chat between admin and employees.
+- Notification center for task/chat/verification events.
+- Read/unread synchronization.
 
 ---
 
-## 5) Dashboard Functional Resume
+## 3) Dashboard Overview
 
 ### Admin Dashboard
-
-#### Dashboard Tab
-- KPIs: project count, task count, completion metrics, active employees
-- Project progress visualization
-
-#### Projects Tab
-- Create/update/delete projects
-- Team member assignment and inline project status updates
-- Cascade deletion: deleting a project removes related tasks
-
-#### Tasks Tab
-- Create and assign tasks (assignee restricted to project team)
-- Priority/deadline/effort/reminder controls
-- Bulk task actions
-- Comments, reminders, +1h logging, activity history
-
-#### Verification Queue Tab
-- Dedicated review pipeline for submitted tasks
-- Submission detail view (notes/evidence/time)
-- Approve/reject/request changes actions
-
-#### Chat Tab
-- Realtime admin-employee conversations
-- Sent/Seen indicators and unread badges
-
-#### Settings Tab
-- Admin profile and account-related controls
+- **Dashboard**: KPIs and project overview.
+- **Projects**: project CRUD + team assignment.
+- **Tasks**: task creation, updates, bulk actions, reminders.
+- **Verification Queue**: pending submissions review.
+- **Chat**: employee conversations.
+- **Settings**: account/profile area.
 
 ### Employee Dashboard
-
-#### Dashboard Tab
-- Personal KPIs and recent work overview
-
-#### Tasks Tab
-- Filter/sort tasks by deadline, priority, status, project, score
-- Progress slider and task collaboration tools
-- Submit completed work for admin verification
-- Lock task edits while waiting for review (`pending-approval`)
-- Overdue handling with date-only timezone-safe logic
-
-#### Projects Tab
-- Assigned project overview and details
-
-#### Chat Tab
-- Realtime messaging with admin and read-state synchronization
-
-#### Profile Tab
-- Basic profile and productivity snapshot
+- **Dashboard**: personal stats and progress summary.
+- **Projects**: assigned projects and details.
+- **Tasks**: progress updates, comments, reminders, review submission.
+- **Chat**: communication with admin.
+- **Profile**: profile actions.
 
 ---
 
-## 6) Service Layer Overview
+## 4) Project Structure
 
-- `AuthService`: authentication and role resolution
-- `ProjectService`: project CRUD, team management, cascade delete, progress aggregation
-- `TaskService`: task CRUD, comments, reminders, time logging, activity, verification submit/approve/reject
-- `ChatService`: messaging, conversation metadata, read-state handling
-- `NotificationService`: create and manage task/chat/verification notifications
-- `TaskActivityService`: timeline/audit events for task operations
+```text
+src/
+├── app/
+│   ├── core/                          # Singleton services, guards, interceptors
+│   │   ├── guards/
+│   │   │   ├── auth.guard.ts
+│   │   │   └── role.guard.ts
+│   │   ├── interceptors/
+│   │   │   └── auth.interceptor.ts
+│   │   ├── services/
+│   │   │   ├── firebase.service.ts
+│   │   │   └── notification.service.ts
+│   │   └── core.module.ts
+│   │
+│   ├── shared/                        # Reusable components, directives, pipes
+│   │   ├── components/
+│   │   │   ├── loading-spinner/
+│   │   │   ├── confirmation-dialog/
+│   │   │   ├── notification-bell/
+│   │   │   └── task-card/
+│   │   ├── directives/
+│   │   ├── pipes/
+│   │   │   ├── status-color.pipe.ts
+│   │   │   └── time-remaining.pipe.ts
+│   │   └── shared.module.ts
+│   │
+│   ├── features/                      # Feature modules (lazy loaded)
+│   │   ├── auth/
+│   │   │   ├── components/
+│   │   │   │   ├── login/
+│   │   │   │   └── register/
+│   │   │   ├── services/
+│   │   │   │   └── auth.service.ts
+│   │   │   └── auth.routes.ts
+│   │   │
+│   │   ├── admin/
+│   │   │   ├── components/
+│   │   │   │   ├── admin-dashboard/
+│   │   │   │   ├── admin-projects/
+│   │   │   │   ├── admin-tasks/
+│   │   │   │   ├── verification-queue/
+│   │   │   │   └── admin-chat/
+│   │   │   ├── services/
+│   │   │   │   ├── admin-project.service.ts
+│   │   │   │   ├── admin-task.service.ts
+│   │   │   │   └── admin-verification.service.ts
+│   │   │   ├── models/
+│   │   │   │   └── admin.interface.ts
+│   │   │   └── admin.routes.ts
+│   │   │
+│   │   ├── employee/
+│   │   │   ├── components/
+│   │   │   │   ├── employee-dashboard/
+│   │   │   │   ├── my-projects/
+│   │   │   │   ├── my-tasks/
+│   │   │   │   └── employee-chat/
+│   │   │   ├── services/
+│   │   │   │   ├── employee-task.service.ts
+│   │   │   │   └── employee-project.service.ts
+│   │   │   ├── models/
+│   │   │   │   └── employee.interface.ts
+│   │   │   └── employee.routes.ts
+│   │   │
+│   │   └── shared-features/           # Features used by both roles
+│   │       ├── chat/
+│   │       │   ├── components/
+│   │       │   │   ├── chat-room/
+│   │       │   │   └── chat-message/
+│   │       │   ├── services/
+│   │       │   │   └── chat.service.ts
+│   │       │   └── models/
+│   │       │       └── chat.interface.ts
+│   │       │
+│   │       └── notifications/
+│   │           ├── components/
+│   │           │   └── notification-list/
+│   │           ├── services/
+│   │           │   └── notification.service.ts
+│   │           └── models/
+│   │               └── notification.interface.ts
+│   │
+│   ├── layout/                        # Layout components
+│   │   ├── main-layout/
+│   │   │   ├── main-layout.component.ts
+│   │   │   └── main-layout.component.html
+│   │   ├── sidebar/
+│   │   │   ├── sidebar.component.ts
+│   │   │   └── sidebar.component.html
+│   │   ├── header/
+│   │   │   ├── header.component.ts
+│   │   │   └── header.component.html
+│   │   └── footer/
+│   │
+│   ├── store/                         # State management (Signals)
+│   │   ├── auth/
+│   │   │   ├── auth.state.ts
+│   │   │   └── auth.store.ts
+│   │   ├── project/
+│   │   │   ├── project.state.ts
+│   │   │   └── project.store.ts
+│   │   ├── task/
+│   │   │   ├── task.state.ts
+│   │   │   └── task.store.ts
+│   │   └── index.ts
+│   │
+│   ├── services/                      # Core business services
+│   │   ├── api/
+│   │   │   ├── project-api.service.ts
+│   │   │   ├── task-api.service.ts
+│   │   │   └── user-api.service.ts
+│   │   ├── firebase/
+│   │   │   ├── firestore.service.ts
+│   │   │   └── storage.service.ts
+│   │   └── utils/
+│   │       ├── date-utils.service.ts
+│   │       └── status-utils.service.ts
+│   │
+│   ├── guards/                        # Route guards
+│   │   ├── auth.guard.ts
+│   │   └── role.guard.ts
+│   │
+│   ├── interceptors/                  # HTTP interceptors
+│   │   └── error.interceptor.ts
+│   │
+│   ├── models/                        # Global interfaces
+│   │   ├── user.interface.ts
+│   │   ├── project.interface.ts
+│   │   ├── task.interface.ts
+│   │   └── common.interface.ts
+│   │
+│   ├── constants/                     # Constants and enums
+│   │   ├── roles.enum.ts
+│   │   ├── status.enum.ts
+│   │   └── routes.const.ts
+│   │
+│   ├── utils/                         # Utility functions
+│   │   ├── validators.ts
+│   │   └── helpers.ts
+│   │
+│   ├── app.component.ts
+│   ├── app.component.html
+│   ├── app.config.ts                  # Standalone app config
+│   └── app.routes.ts                  # Main routing
+│
+├── assets/                            # Static assets
+│   ├── images/
+│   ├── icons/
+│   └── styles/
+│       └── tailwind.css
+│
+├── environments/
+│   ├── environment.ts
+│   └── environment.prod.ts
+│
+├── styles/
+│   ├── _variables.scss
+│   ├── _mixins.scss
+│   └── global.scss
+│
+└── index.html
+```
+
+### Structure Philosophy
+- **Core**: app-wide singleton concerns (guards, interceptors, infrastructure services).
+- **Shared**: reusable UI primitives, directives, and pipes.
+- **Features**: business domains (auth/admin/employee/shared-features), ideally lazy-loaded.
+- **Store**: signal-based centralized state slices.
+- **Services/Models/Constants/Utils**: clean separation of business logic, contracts, and helpers.
 
 ---
 
-## 7) Business Rules
+## 5) Tech Stack
 
-- Project progress is task-driven:
-	- `taskCount = total tasks`
-	- `completedTaskCount = tasks with status = done`
-	- `completionPercentage = completedTaskCount / taskCount`
-- Deleting a project removes all tasks linked to that project
-- Dependency feature has been removed from task workflows
-- Employee cannot finalize a task without admin verification
+- Angular 20 (standalone components)
+- Firebase Auth + Firestore
+- Angular Signals + computed state
+- Tailwind CSS utility styling
+- SweetAlert2 dialogs
 
 ---
 
-## 8) UI/UX Notes
+## 6) Business Rules
 
-- Modernized visual system with Tailwind classes and reusable utility styling
-- Material Symbols icon set integrated across dashboards
-- SweetAlert2-based confirmation/prompt UX
-- Refined chat interface and improved perceived send performance
+- Project completion is derived from task completion.
+- Deleting a project deletes related tasks.
+- Employee cannot mark a task done directly without admin verification.
+- Verification data (notes/evidence/time spent) is stored with the task submission.
 
 ---
 
-## 9) Local Setup
+## 7) Local Setup
 
 ### Prerequisites
 - Node.js (LTS)
 - npm
-- Firebase project with Auth + Firestore configured
+- Firebase project configured for Auth + Firestore
 
 ### Install
 ```bash
 npm install
 ```
 
-### Start
+### Run (development)
 ```bash
 npm start
 ```
 
-Default URL: `http://localhost:4200` (or next available port if occupied).
+### Build (development)
+```bash
+ng build --configuration development
+```
 
-### Build
+### Build (production profile)
 ```bash
 npm run build
 ```
 
-### Test
+### Run tests
 ```bash
 npm test
 ```
 
 ---
 
-## 10) Recent Updates Summary
+## 8) Notes
 
-- Added full Task Verification System with admin approval gate
-- Added `pending-approval` task status and verification metadata model
-- Added admin Verification Queue tab with review actions
-- Added employee “Submit for Review” flow and pending-task lock rules
-- Added verification notification methods (submitted/approved/rejected)
-- Improved chat responsiveness and read-state flow
-- Kept project progress strictly aligned with task statuses
+- If `npm run build` fails on bundle budgets, this is usually a production optimization budget constraint (not necessarily a TypeScript error).
+- For refactor verification, prefer development build:
+  - `ng build --configuration development --watch=false`

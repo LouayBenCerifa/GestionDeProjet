@@ -1,0 +1,67 @@
+
+    <div class="dashboard-container">
+      <!-- Access Denied State -->
+      @if (!isAdmin()) {
+        <div class="access-denied">
+          <div class="denied-icon"><span class="material-symbols-rounded app-icon">block</span></div>
+          <h1>Access Denied</h1>
+          <p>This dashboard is restricted to administrators only.</p>
+          <p class="user-role-info">Your role: <strong>{{ userRole() }}</strong></p>
+          <button class="back-btn" (click)="goBack()">Go Back to Home</button>
+        </div>
+      } @else {
+        <app-dashboard-sidebar
+          [items]="sidebarItems"
+          [activeTab]="activeTab()"
+          (tabChange)="onSidebarTabChange($event)"
+          (logout)="logout()"></app-dashboard-sidebar>
+
+        <!-- Main Content -->
+        <main class="main-content">
+          <app-dashboard-topbar
+            [title]="getTabTitle()"
+            [unreadCount]="unreadNotifications()"
+            [userName]="userName()"
+            [roleLabel]="'Administrator'"
+            (toggleNotifications)="toggleNotifications()"></app-dashboard-topbar>
+
+          @if (showNotifications()) {
+            <app-notifications-panel
+              [notifications]="notifications()"
+              (clearAll)="clearAllNotifications()"
+              (markAsRead)="markAsRead($event)"></app-notifications-panel>
+          }
+
+          <!-- Dashboard Tab -->
+          @if (activeTab() === 'dashboard') {
+            <app-admin-dashboard-tab [ctx]="this"></app-admin-dashboard-tab>
+          }
+
+          <!-- Projects Tab -->
+          @if (activeTab() === 'projects') {
+            <app-admin-projects-tab [ctx]="this"></app-admin-projects-tab>
+          }
+
+          <!-- Tasks Tab -->
+          @if (activeTab() === 'tasks') {
+            <app-admin-tasks-tab [ctx]="this"></app-admin-tasks-tab>
+          }
+
+          <!-- Verification Queue Tab -->
+          @if (activeTab() === 'verification') {
+            <app-admin-verification-tab [ctx]="this"></app-admin-verification-tab>
+          }
+
+          <!-- Chat Tab -->
+          @if (activeTab() === 'chat') {
+            <app-admin-chat-tab [ctx]="this"></app-admin-chat-tab>
+          }
+
+          <!-- Settings Tab -->
+          @if (activeTab() === 'settings') {
+            <app-admin-settings-tab [ctx]="this"></app-admin-settings-tab>
+          }
+        </main>
+      }
+    </div>
+  

@@ -1,0 +1,63 @@
+
+    <div class="dashboard-container">
+      <!-- Access Denied State -->
+      @if (!isEmployee()) {
+        <div class="access-denied">
+          <div class="denied-icon"><span class="material-symbols-rounded app-icon">block</span></div>
+          <h1>Access Denied</h1>
+          <p>This dashboard is restricted to employees only.</p>
+          <p class="user-role-info">Your role: <strong>{{ userRole() }}</strong></p>
+          <button class="back-btn" (click)="goBack()">Go Back to Home</button>
+        </div>
+      } @else {
+        <app-dashboard-sidebar
+          [items]="sidebarItems"
+          [activeTab]="activeTab()"
+          (tabChange)="onSidebarTabChange($event)"
+          (logout)="logout()"></app-dashboard-sidebar>
+
+        <!-- Main Content -->
+        <main class="main-content">
+          <app-dashboard-topbar
+            [title]="getTabTitle()"
+            [unreadCount]="unreadNotifications()"
+            [userName]="userName()"
+            [roleLabel]="'Employee'"
+            (toggleNotifications)="toggleNotifications()"></app-dashboard-topbar>
+
+          <!-- Notifications Panel -->
+          @if (showNotifications()) {
+            <app-notifications-panel
+              [notifications]="notifications()"
+              (clearAll)="clearAllNotifications()"
+              (markAsRead)="markAsRead($event)"></app-notifications-panel>
+          }
+
+          <!-- Dashboard Tab -->
+          @if (activeTab() === 'dashboard') {
+            <app-employee-dashboard-tab [ctx]="this"></app-employee-dashboard-tab>
+          }
+
+          <!-- Tasks Tab -->
+          @if (activeTab() === 'tasks') {
+            <app-employee-tasks-tab [ctx]="this"></app-employee-tasks-tab>
+          }
+
+          <!-- Projects Tab -->
+          @if (activeTab() === 'projects') {
+            <app-employee-projects-tab [ctx]="this"></app-employee-projects-tab>
+          }
+
+          <!-- Chat Tab -->
+          @if (activeTab() === 'chat') {
+            <app-employee-chat-tab [ctx]="this"></app-employee-chat-tab>
+          }
+
+          <!-- Profile Tab -->
+          @if (activeTab() === 'profile') {
+            <app-employee-profile-tab [ctx]="this"></app-employee-profile-tab>
+          }
+        </main>
+      }
+    </div>
+  

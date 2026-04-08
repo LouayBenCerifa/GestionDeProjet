@@ -193,7 +193,12 @@ textarea::placeholder {
 
 	.sidebar { @apply w-[260px] p-5 flex flex-col bg-gradient-to-b from-slate-800 to-slate-950 border-r border-slate-400/20; }
 	.sidebar-header { @apply mb-8; }
-	.logo { @apply text-2xl font-bold text-white m-0; }
+	.logo { @apply text-2xl font-bold text-white m-0 flex items-center gap-2; }
+	.brand-name {
+		@apply text-indigo-50;
+		letter-spacing: 0.01em;
+		text-shadow: 0 1px 2px rgba(15, 23, 42, 0.35), 0 0 16px rgba(99, 102, 241, 0.28);
+	}
 	.sidebar-nav { @apply flex flex-col gap-2.5 flex-1; }
 	.nav-item { @apply flex items-center gap-3 px-4 py-3 rounded-lg text-slate-300 font-semibold cursor-pointer no-underline; }
 	.material-symbols-rounded {
@@ -278,10 +283,32 @@ textarea::placeholder {
 	.section { @apply mb-10; }
 	.section h2 { @apply text-slate-800 mb-5 text-xl; }
 	.section-header { @apply flex items-center justify-between mb-7; }
+	.dashboard-section-card .section-header {
+		@apply mb-6 pb-4 border-b border-slate-100;
+	}
+	.dashboard-section-card .section-header h2 {
+		@apply m-0 text-lg font-semibold text-slate-800;
+	}
 	.filter-controls { @apply flex gap-2.5; }
 
 	.stats-grid { @apply grid gap-5 mb-10; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
 	.stat-card { @apply p-6 rounded-xl border border-indigo-100 shadow-md bg-gradient-to-br from-white to-indigo-50; }
+	.dashboard-metrics-grid { @apply mb-8; }
+	.dashboard-metric-card {
+		@apply relative overflow-hidden border border-indigo-100/90 shadow-sm;
+		transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+	}
+	.dashboard-metric-card::after {
+		content: '';
+		@apply absolute left-0 right-0 top-0 h-0.5 bg-gradient-to-r from-indigo-500 to-cyan-400 opacity-80;
+	}
+	.dashboard-metric-card:hover {
+		@apply border-indigo-200 shadow-md;
+		transform: translateY(-2px);
+	}
+	.dashboard-section-card {
+		@apply rounded-2xl border border-indigo-100/80 bg-white/90 shadow-sm p-6;
+	}
 	.stat-header { @apply flex items-center gap-3 mb-4; }
 	.stat-icon { @apply text-xl font-bold text-indigo-600; }
 	.stat-icon.app-icon {
@@ -348,6 +375,27 @@ textarea::placeholder {
 	.progress-bar-container { @apply w-full h-2 bg-slate-200 rounded overflow-hidden; }
 	.progress-bar { @apply h-full bg-gradient-to-r from-indigo-500 to-cyan-400; }
 
+	.bulk-actions-card {
+		@apply border border-indigo-200 bg-gradient-to-br from-indigo-50/80 to-white shadow-sm;
+	}
+	.bulk-actions-card h3 {
+		@apply m-0 mb-3 text-sm font-semibold text-indigo-700;
+	}
+	.bulk-actions-card .form-row {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 0.75rem;
+	}
+	.bulk-actions-card .form-actions {
+		@apply mt-3 flex justify-end;
+	}
+	.bulk-actions-card .input {
+		@apply bg-white border-indigo-200;
+	}
+	.bulk-actions-card .btn-primary {
+		@apply shadow-sm;
+	}
+
 	.task-comments { @apply mb-4 pt-4 border-t border-slate-100; }
 	.task-comments h4 { @apply m-0 mb-3 text-sm text-slate-800; }
 	.comment { @apply mb-2 px-3 py-2 rounded bg-slate-50; }
@@ -411,9 +459,13 @@ textarea::placeholder {
 	.input { @apply px-3 py-2.5 text-sm rounded-lg border border-indigo-100 bg-white; }
 
 	.chat-container { @apply flex gap-0 h-[600px] rounded-2xl bg-white/95 border border-indigo-100 shadow-md overflow-hidden; }
-	.chat-sidebar { @apply w-[320px] p-5 border-r border-slate-200 bg-gradient-to-b from-slate-50 to-white overflow-y-auto; }
-	.chat-sidebar h3 { @apply m-0 mb-4 text-base text-slate-800; }
-	.admins-list, .conversations-list { @apply flex flex-col gap-2 mb-6; }
+	.chat-sidebar { @apply w-[340px] p-4 border-r border-slate-200 bg-gradient-to-b from-slate-50 to-white overflow-y-auto; }
+	.chat-sidebar-header { @apply mb-2 flex items-center justify-between; }
+	.chat-sidebar-header.secondary { @apply mt-2; }
+	.chat-sidebar-title { @apply m-0 text-sm font-semibold uppercase tracking-wide text-slate-500; }
+	.chat-count-chip { @apply inline-flex items-center justify-center min-w-6 h-6 px-2 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700; }
+	.chat-list-block { @apply mb-4 rounded-xl border border-slate-200 bg-white/80 p-2; }
+	.admins-list, .conversations-list { @apply flex flex-col gap-1.5; }
 	.admin-item, .conversation-item { @apply relative flex gap-3 p-3 rounded-xl cursor-pointer border border-transparent; }
 	.admin-item:hover, .conversation-item:hover { @apply bg-slate-50 border-slate-200; }
 	.admin-item.active, .conversation-item.active { @apply bg-indigo-50 border-indigo-100; }
@@ -429,21 +481,30 @@ textarea::placeholder {
 	.chat-header h3 { @apply m-0 text-slate-800; }
 	.chat-title-wrap h3 { @apply m-0 text-slate-800; }
 	.chat-subtitle { @apply m-0 mt-1 text-xs text-slate-500; }
-	.messages-container { @apply flex-1 flex flex-col gap-3 mb-4 overflow-y-auto pr-1; }
+	.messages-container { @apply flex-1 flex flex-col gap-3 mb-4 overflow-y-auto pr-1 rounded-xl bg-slate-50/70 border border-slate-100 p-4; }
 	.message { @apply flex justify-start; }
 	.message.sent { @apply justify-end; }
-	.message-bubble { @apply max-w-[72%] px-4 py-3 rounded-2xl bg-slate-100 text-slate-800 border border-slate-200; }
+	.message-bubble { @apply max-w-[72%] px-4 py-3 rounded-2xl bg-white text-slate-800 border border-slate-200 shadow-sm; }
 	.message.sent .message-bubble { @apply bg-gradient-to-r from-indigo-500 to-indigo-600 text-white border-indigo-500; }
 	.message-bubble p { @apply m-0 text-sm; }
 	.message-meta { @apply mt-1.5 flex items-center gap-2 justify-between; }
 	.message-bubble small { @apply text-xs opacity-70; }
 	.seen-state { @apply text-[11px] font-semibold opacity-80; }
 	.seen-state.seen { @apply text-emerald-200 opacity-100; }
-	.chat-input-area { @apply mt-auto flex gap-3 items-center; }
-	.chat-input { @apply flex-1 px-4 py-3 rounded-xl border border-indigo-100 bg-indigo-50/30; }
-	.chat-send-btn { @apply bg-indigo-600 text-white; }
+	.chat-input-area { @apply mt-auto flex gap-3 items-center rounded-xl border border-slate-200 p-2 bg-white shadow-sm; }
+	.chat-input { @apply flex-1 px-4 py-3 rounded-lg border border-indigo-100 bg-indigo-50/20; }
+	.chat-send-btn { @apply bg-indigo-600 text-white rounded-lg; }
+	.chat-send-btn:hover { @apply bg-indigo-700; }
 	.no-conversation, .no-messages { @apply h-full flex items-center justify-center text-slate-400; }
 	.no-messages { @apply italic; }
+	.chat-empty-state { @apply flex flex-col items-center gap-2 text-center text-slate-400; }
+	.chat-empty-state .material-symbols-rounded {
+		@apply text-indigo-300;
+		font-size: 1.7rem;
+		font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+	}
+	.chat-empty-state p { @apply m-0 text-sm text-slate-500; }
+	.chat-empty-state small { @apply text-xs text-slate-400; }
 
 	.settings-card { @apply rounded-xl border border-indigo-100 bg-white/95 shadow-sm p-6; }
 	.admin-profile-card { @apply max-w-3xl; }
@@ -478,6 +539,9 @@ textarea::placeholder {
 	.profile-actions { @apply flex flex-wrap gap-3; }
 
 	.empty-state { @apply text-center p-10 text-slate-400 rounded-xl bg-white/90 shadow-md; }
+	.dashboard-section-card .empty-state {
+		@apply bg-slate-50 border border-slate-200 text-slate-500 shadow-none;
+	}
 	.activity-card { @apply mt-4; }
 
 	@media (max-width: 768px) {
@@ -487,10 +551,33 @@ textarea::placeholder {
 		.sidebar-nav .nav-item { @apply whitespace-nowrap; }
 		.projects-grid { @apply grid-cols-1; }
 		.stats-grid { @apply grid-cols-2; }
-		.chat-container { @apply flex-col h-auto; }
-		.chat-sidebar { @apply w-full max-h-[250px]; }
+		.chat-container { @apply flex-col h-auto min-h-[calc(100vh-220px)]; }
+		.chat-sidebar {
+			@apply w-full max-h-none border-r-0 border-b border-slate-200 p-3;
+		}
+		.chat-list-block {
+			@apply mb-3;
+			max-height: 180px;
+			overflow-y: auto;
+		}
+		.chat-main { @apply p-3; }
+		.chat-header { @apply mb-3 pb-3; }
+		.messages-container {
+			@apply p-3;
+			min-height: 260px;
+			max-height: 45vh;
+		}
+		.message-bubble { @apply max-w-[86%]; }
+		.chat-input-area {
+			@apply sticky bottom-0;
+			backdrop-filter: blur(6px);
+		}
+		.chat-input { @apply py-2.5; }
 		.profile-header { @apply flex-col text-center; }
 		.profile-actions { @apply justify-center; }
 		.notifications-panel { @apply right-2.5 left-2.5 w-auto; }
+		.bulk-actions-card .form-row { grid-template-columns: 1fr; }
+		.bulk-actions-card .form-actions { @apply justify-stretch; }
+		.bulk-actions-card .form-actions .btn { @apply w-full; }
 	}
 }

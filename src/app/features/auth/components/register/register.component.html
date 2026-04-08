@@ -1,0 +1,95 @@
+<div class="signin-container">
+  <div class="signin-card">
+    <header class="card-header">
+      <h1>Create your account</h1>
+      <div class="subtitle">Sign up to access GestionPro dashboards</div>
+    </header>
+
+    <form [formGroup]="registerForm" (ngSubmit)="register()" class="signin-form" autocomplete="on">
+      <div class="form-group">
+        <label for="name">Full Name</label>
+        <input
+          id="name"
+          type="text"
+          formControlName="name"
+          placeholder="Enter your full name"
+          autocomplete="name"
+          [class.error]="registerForm.get('name')?.invalid && registerForm.get('name')?.touched"
+        />
+        @if (registerForm.get('name')?.invalid && registerForm.get('name')?.touched) {
+          <div class="error-text">Name is required (minimum 2 characters).</div>
+        }
+      </div>
+
+      <div class="form-group">
+        <label for="email">Email Address</label>
+        <input
+          id="email"
+          type="email"
+          formControlName="email"
+          placeholder="Enter your email"
+          autocomplete="email"
+          [class.error]="registerForm.get('email')?.invalid && registerForm.get('email')?.touched"
+        />
+        @if (registerForm.get('email')?.invalid && registerForm.get('email')?.touched) {
+          <div class="error-text">Please enter a valid email address.</div>
+        }
+      </div>
+
+      <div class="form-group">
+        <label for="role">Role</label>
+        <select id="role" formControlName="role">
+          <option value="employee">Employee</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input
+          id="password"
+          type="password"
+          formControlName="password"
+          placeholder="Create a password"
+          autocomplete="new-password"
+          [class.error]="registerForm.get('password')?.invalid && registerForm.get('password')?.touched"
+        />
+        @if (registerForm.get('password')?.invalid && registerForm.get('password')?.touched) {
+          <div class="error-text">Password must include upper, lower, number, and 8+ characters.</div>
+        }
+      </div>
+
+      <div class="form-group">
+        <label for="confirmPassword">Confirm Password</label>
+        <input
+          id="confirmPassword"
+          type="password"
+          formControlName="confirmPassword"
+          placeholder="Confirm your password"
+          autocomplete="new-password"
+          [class.error]="registerForm.hasError('fieldsMismatch') && registerForm.get('confirmPassword')?.touched"
+        />
+        @if (registerForm.hasError('fieldsMismatch') && registerForm.get('confirmPassword')?.touched) {
+          <div class="error-text">Passwords do not match.</div>
+        }
+      </div>
+
+      @if (errorMessage) {
+        <div class="global-error">{{ errorMessage }}</div>
+      }
+
+      <button type="submit" class="submit-btn" [disabled]="registerForm.invalid || isLoading">
+        @if (isLoading) {
+          <span class="spinner"></span> Creating account...
+        } @else {
+          Create account
+        }
+      </button>
+
+      <div class="signup-link">
+        <span>Already have an account?</span>
+        <a [routerLink]="loginPath" class="link">Back to Sign in</a>
+      </div>
+    </form>
+  </div>
+</div>
